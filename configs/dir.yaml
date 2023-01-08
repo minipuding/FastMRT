@@ -1,0 +1,7 @@
+DATA_DIR: '../Datasets/'
+PT_DATA_DIR: '../pt_Datasets'
+LOG_DIR: './logs/'
+PRF_CONFIG_DIR: './configs/prf.yaml'
+RUNET_CONFIG_DIR: './configs/runet.yaml'
+CASNET_CONFIG_DIR: './configs/casnet.yaml'
+RFTNET_CONFIG_DIR: './configs/rftnet.yaml'

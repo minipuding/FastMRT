@@ -1,0 +1,5 @@
+
+B0: 3                       # Fixed Param
+GAMMA: 42.576               # Fixed Param
+ALPHA: 0.01                 # Fixed Param
+TE: 12                      # Fixed Param
