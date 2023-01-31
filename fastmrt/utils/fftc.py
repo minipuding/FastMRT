@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 
-def fft2c_tensor(data : torch.Tensor, fftshift_dim: Optional[Union[int, Tuple[int]]] = -2) -> torch.Tensor:
+def fft2c_tensor(data : torch.Tensor, fftshift_dim: Optional[Union[int, Tuple[int, int]]] = -2) -> torch.Tensor:
     """
         Apply centered 2 dimensional Fast Fourier Transform for tensor data.
 

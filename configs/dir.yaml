@@ -1,5 +1,5 @@
 DATA_DIR: '../Datasets/'
-PT_DATA_DIR: '../pt_Datasets'
+PT_DATA_DIR: '../ImageNet/ILSVRC/Data/CLS-LOC/'
 LOG_DIR: './logs/'
 PRF_CONFIG_DIR: './configs/prf.yaml'
 RUNET_CONFIG_DIR: './configs/runet.yaml'

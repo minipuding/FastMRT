@@ -16,17 +16,17 @@ class UNetModule(BaseModule):
             base_channels: int = 32,
             level_num: int = 4,
             drop_prob: float = 0.0,
-            leakyrelu_slope = 0.4,
-            last_layer_with_act = False,
+            leakyrelu_slope: float = 0.4,
+            last_layer_with_act: bool = False,
             lr: float = 1e-3,
             lr_step_size: int = 40,
             lr_gamma: float = 0.1,
             weight_decay: float = 0.0,
             tmap_prf_func: PrfFunc = None,
             tmap_patch_rate: int = 4,
-            tmap_max_temp_thresh = 45,
-            tmap_ablation_thresh = 43,
-            log_images_frame_idx: int = 5, # recommend 4 ~ 8
+            tmap_max_temp_thresh: int = 45,
+            tmap_ablation_thresh: int = 43,
+            log_images_frame_idx: int = 5,  # recommend 4 ~ 8
             log_images_freq: int = 50,
     ):
         super(UNetModule, self).__init__(tmap_prf_func=tmap_prf_func,
@@ -53,18 +53,11 @@ class UNetModule(BaseModule):
                           drop_prob=self.drop_prob,
                           leakyrelu_slope=self.leakyrelu_slope,
                           last_layer_with_act=self.last_layer_with_act,
-        )
+                          )
 
     def training_step(self, batch, batch_idx):
         output = self.model(batch.input)
         train_loss = F.l1_loss(output, batch.label)
-        # # ================ test phase loss ==================
-        # alpha = 2
-        # output_cpx = rt2ct(output)
-        # label_cpx = rt2ct(batch.label)
-        # train_loss = torch.mean(torch.abs(output_cpx.abs() - label_cpx.abs()) +
-        #                        (torch.sin(torch.angle(output_cpx * torch.conj(label_cpx)) / 2) * label_cpx.abs()) ** 2 * alpha)
-        # # # ===================================================
 
         return {"loss": train_loss}
 
@@ -112,12 +105,13 @@ class UNetModule(BaseModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(),
-                                    lr=self.lr,
-                                    weight_decay=self.weight_decay)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer,
-                                                    step_size=self.lr_step_size,
-                                                    gamma=self.lr_gamma)
+                                     lr=self.lr,
+                                     weight_decay=self.weight_decay)
+        # scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer,
+        #                                             step_size=self.lr_step_size,
+        #                                             gamma=self.lr_gamma)
+
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,
+                                                               T_max=150,
+                                                               last_epoch=-1)
         return [optimizer], [scheduler]
-
-
-

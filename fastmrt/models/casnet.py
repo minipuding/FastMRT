@@ -31,19 +31,19 @@ class CasNet(nn.Module):
         self.leakyrelu_slope = leakyrelu_slope
 
         self.res_blocks = nn.ModuleList(
-            self.res_block_num * [ResBlock(in_channels=self.in_channels,
-                                           out_channels=self.out_channels,
-                                           base_channels=self.base_channels,
-                                           res_conv_ksize=self.res_conv_ksize,
-                                           res_conv_num=self.res_conv_num,
-                                           drop_prob=self.drop_prob,
-                                           leakyrelu_slope=self.leakyrelu_slope)]
-            # self.res_block_num * [Unet(in_channels=self.in_channels,
-            #                            out_channels=self.out_channels,
-            #                            base_channels=self.base_channels,
-            #                            level_num=3,
-            #                            drop_prob=self.drop_prob,
-            #                            leakyrelu_slope=self.leakyrelu_slope)]
+            # self.res_block_num * [ResBlock(in_channels=self.in_channels,
+            #                                out_channels=self.out_channels,
+            #                                base_channels=self.base_channels,
+            #                                res_conv_ksize=self.res_conv_ksize,
+            #                                res_conv_num=self.res_conv_num,
+            #                                drop_prob=self.drop_prob,
+            #                                leakyrelu_slope=self.leakyrelu_slope)]
+            self.res_block_num * [Unet(in_channels=self.in_channels,
+                                       out_channels=self.out_channels,
+                                       base_channels=self.base_channels,
+                                       level_num=4,
+                                       drop_prob=self.drop_prob,
+                                       leakyrelu_slope=self.leakyrelu_slope)]
         )
         self.dc_blocks = nn.ModuleList(
             self.res_block_num * [DCBlock()]
@@ -59,7 +59,7 @@ class CasNet(nn.Module):
             # output = denormalize(output, mean, std)
             temp = dc_block((output + temp) / 2, input, origin_shape, mask)
             outputs += [temp]
-        return outputs
+        return outputs[-1]
 
 
 class ResBlock(nn.Module):
@@ -168,20 +168,10 @@ class DCBlock(nn.Module):
     ):
         super(DCBlock, self).__init__()
 
-    def forward(self, output, origin_input, origin_shape, mask, dc_weight = 0.9):
+    def forward(self, output, origin_input, origin_shape, mask, dc_weight=1):
         output_kspace = fft2c_tensor(real_tensor_to_complex_tensor(output))
         origin_input_kspace = fft2c_tensor(real_tensor_to_complex_tensor(origin_input))
-        dc_kspace = torch.zeros(output_kspace.shape, dtype=torch.complex64, device='cuda') # b * 256 * 256 complex
-        reg_shape = (output_kspace.shape[-2], output_kspace.shape[-1]) # a register for resize shape
-        for sample_idx in range(output_kspace.shape[0]): # since the origin shape may different
-            sample_origin_shape = (origin_shape[0][sample_idx], origin_shape[1][sample_idx])
-            sample_mask = mask[sample_idx]
-
-            unpad_output_kspace = self._unpad(output_kspace[sample_idx].squeeze(), sample_origin_shape)
-            unpad_origin_input_kspace = self._unpad(origin_input_kspace[sample_idx].squeeze(), sample_origin_shape)
-            unpad_dc_kspace = dc_weight * (unpad_origin_input_kspace - sample_mask * unpad_output_kspace) + unpad_output_kspace # soft dc
-                    # equal to: (dc_weight * unpad_origin_input_kspace + (1 - dc_weight) * sample_mask * unpad_output_kspace + (1 - sample_mask) * unpad_output_kspace
-            dc_kspace[sample_idx] = self._pad(unpad_dc_kspace, reg_shape)
+        dc_kspace = dc_weight * (origin_input_kspace - mask * output_kspace) + output_kspace
 
         return complex_tensor_to_real_tensor(ifft2c_tensor(dc_kspace))
 

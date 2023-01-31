@@ -59,9 +59,9 @@ class BaseModule(pl.LightningModule):
             for sample_idx in range(log["input"].shape[0]):
                 if log["frame_idx"][sample_idx] > 0: # we only focus on temperature maps after first frame.
                     full_tmaps += [self.tmap_prf_func(rt2ct(log["label"][sample_idx]),
-                                               rt2ct(log["label_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
+                                                      rt2ct(log["label_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
                     recon_tmaps += [self.tmap_prf_func(rt2ct(log["output"][sample_idx]),
-                                               rt2ct(log["output_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
+                                                       rt2ct(log["output_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
         self._log_tmap_metrics(full_tmaps, recon_tmaps)
 
         # save log medias (images & tmaps)
@@ -137,9 +137,9 @@ class BaseModule(pl.LightningModule):
 
             # metric 2: patch root-mean-square error
             patch_full_tmap = full_tmap[(tmap_height - patch_height) // 2: tmap_height - (tmap_height - patch_height) // 2,
-                              (tmap_width - patch_width) // 2: tmap_width - (tmap_width - patch_width) // 2]
+                                        (tmap_width - patch_width) // 2: tmap_width - (tmap_width - patch_width) // 2]
             patch_recon_tmap = recon_tmap[(tmap_height - patch_height) // 2: tmap_height - (tmap_height - patch_height) // 2,
-                              (tmap_width - patch_width) // 2: tmap_width - (tmap_width - patch_width) // 2]
+                                          (tmap_width - patch_width) // 2: tmap_width - (tmap_width - patch_width) // 2]
             patch_rmse += FastmrtMetrics.mse(patch_recon_tmap.unsqueeze(0), patch_full_tmap.unsqueeze(0))
 
             # metric 3 & 4: max temperature error & distance
@@ -155,15 +155,15 @@ class BaseModule(pl.LightningModule):
                 max_temp_num += 1
 
             # metric 5: dice coefficient of ablation area
-            area_full_tmap = patch_full_tmap > self.tmap_ablation_thresh
-            area_recon_tmap = patch_recon_tmap > self.tmap_ablation_thresh
+            area_full_tmap = (patch_full_tmap > self.tmap_ablation_thresh).type(torch.FloatTensor)
+            area_recon_tmap = (patch_recon_tmap > self.tmap_ablation_thresh).type(torch.FloatTensor)
             if torch.sum(area_full_tmap) > 1: # ensuring the ablation area exist
                 ablation_area_dice += FastmrtMetrics.dice(area_recon_tmap.unsqueeze(0), area_full_tmap.unsqueeze(0))
                 dice_calc_num += 1
 
             # metric 6: bland-altman analysis outer LoA
             _, _, ba_error_mean, ba_error_std, ba_out_loa = FastmrtMetrics.bland_altman(patch_recon_tmap, patch_full_tmap)
-            patch_ba_error_mean += ba_error_mean
+            patch_ba_error_mean += torch.abs(ba_error_mean)
             patch_ba_error_std += ba_error_std
             patch_ba_out_loa += ba_out_loa
 
@@ -241,7 +241,7 @@ class BaseModule(pl.LightningModule):
             # add temperature maps to log
             self._log_tmap(mask_tmap, fig_name=f"{section_name}/E_mask_tmap")
             self._log_tmap(full_tmap, fig_name=f"{section_name}/F_full_tmap")
-            self._log_tmap(recon_tmap, fig_name=f"{section_name}/G_recon_temp")
+            self._log_tmap(recon_tmap, fig_name=f"{section_name}/G_recon_tmap")
             self._log_tmap(error_tmap, fig_name=f"{section_name}/H_error_tmap", vmin=-10, vmax=10)
 
             # add bland-altman analysis & linear regression to log

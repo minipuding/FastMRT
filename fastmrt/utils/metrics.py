@@ -23,6 +23,10 @@ class FastmrtMetrics:
             ssim_metric: a ssim value.
         """
         ssim_metric = torch.tensor(0, dtype=torch.float32, device='cuda')
+        pred = (pred - torch.min(pred, dim=0, keepdim=True)[0]) / \
+               (torch.max(pred, dim=0, keepdim=True)[0] - torch.min(pred, dim=0, keepdim=True)[0])
+        gt = (gt - torch.min(gt, dim=0, keepdim=True)[0]) / \
+             (torch.max(gt, dim=0, keepdim=True)[0] - torch.min(gt, dim=0, keepdim=True)[0])
         for batch_idx in range(pred.shape[0]):
             ssim_metric += pssim.ssim(pred[batch_idx].unsqueeze(0).cuda(), gt[batch_idx].unsqueeze(0).cuda()).item()
         return ssim_metric / pred.shape[0]

@@ -5,8 +5,10 @@ import albumentations as A
 from typing import Tuple, Union, Dict, Optional, Any
 
 import numpy as np
+import torch
 
 from fastmrt.utils.fftc import ifft2c_numpy, fft2c_numpy
+from fastmrt.utils.seed import temp_seed
 from fastmrt.data.transforms import UNetDataTransform, CasNetDataTransform, RFTNetDataTransform
 from fastmrt.data.mask import MaskFunc
 from fastmrt.data.prf import PrfFunc
@@ -34,22 +36,19 @@ class SimuFocus:
     def __call__(
         self,
         kspace,
-        mask,
-        target,
-        attrs,
         fname,
         dataslice,
+        rng,
     ):
-        delta_phis = np.append(np.sort(np.random.rand(self.frame_num - self.cooling_frame_num)),
-                               np.abs(np.sort(np.random.rand(self.cooling_frame_num)) * 0.5 - 1)) * self.max_delta_phi
+        delta_phis = np.append(np.sort(rng.rand(self.frame_num - self.cooling_frame_num)),
+                               np.abs(np.sort(rng.rand(self.cooling_frame_num)) * 0.5 - 1)) * self.max_delta_phi
         cropped_image, cropped_kspace = self.crop_func(kspace)
-        simufocus_mask = self.generate_simulated_focus(cropped_image.shape)
+        simufocus_mask = self.generate_simulated_focus(cropped_image.shape, rng)
         return {
             "image": cropped_image,
             "kspace": cropped_kspace,
             "delta_phis": delta_phis,
             "simufocus_mask": simufocus_mask,
-            "attrs": attrs,
             "fname": fname,
             "dataslice": dataslice,
         }
@@ -57,6 +56,7 @@ class SimuFocus:
     def generate_simulated_focus(
             self,
             mask_size: Tuple[int, int],
+            rng: np.random.RandomState,
     ):
         raise NotImplementedError
 
@@ -72,7 +72,7 @@ class SimuFocusGaussian(SimuFocus):
             center_crop_size: Union[int, Tuple[int, int]] = 224,
             random_crop_size: Union[int, Tuple[int, int]] = 96,
             max_delta_temp: float = 30,
-            shift_limit: float = 0.1,
+            shift_limit: float = 0.02,
             scale_limit: float = 0.05,
             sigma_scale_limit: Tuple[float, float] = (1, 6),
     ):
@@ -92,9 +92,10 @@ class SimuFocusGaussian(SimuFocus):
     def generate_simulated_focus(
             self,
             mask_size: Tuple[int, int],
+            rng: np.random.RandomState,
     ):
         sigma1 = 0.1
-        sigma2 = sigma1 * (self.sigma_scale_limit[0] + np.random.rand() *
+        sigma2 = sigma1 * (self.sigma_scale_limit[0] + rng.rand() *
                            (self.sigma_scale_limit[1] - self.sigma_scale_limit[0]))
         inv_A = 1 / (sigma1 ** 2)
         inv_B = 1 / (sigma2 ** 2)
@@ -183,6 +184,8 @@ class FastmrtPretrainTransform:
             max_delta_temp: float = 30,
     ):
         super(FastmrtPretrainTransform, self).__init__()
+        self.rng = np.random.RandomState()
+        self.use_random_seed = use_random_seed
         if simufocus_type == "gaussian":
             self.simufocus_transform = SimuFocusGaussian(frame_num=frame_num,
                                                          cooling_time_rate=cooling_time_rate,
@@ -220,26 +223,26 @@ class FastmrtPretrainTransform:
     def __call__(
             self,
             kspace,
-            mask,
-            target,
-            attrs,
             fname,
             dataslice,
             use_tmap_mask: bool = True,
     ):
-        simulated_data = self.simufocus_transform(kspace, mask, target, attrs, fname, dataslice)
-        interface_data = self.transform_interface(simulated_data)
+        seed = None if self.use_random_seed is True else tuple(map(ord, fname))
+        with temp_seed(self.rng, seed):
+            simulated_data = self.simufocus_transform(kspace, fname, dataslice, self.rng)
+            interface_data = self.transform_interface(simulated_data, self.rng)
         return self.data_transform(interface_data)
 
-    def transform_interface(self, simulated_data):
-        max_phase = np.random.choice(simulated_data["delta_phis"], 1)
+    @staticmethod
+    def transform_interface(simulated_data, rng):
+        max_phase = rng.choice(simulated_data["delta_phis"], 1)
         phase_map = np.exp(1j * max_phase * simulated_data["simufocus_mask"])
         kspace = fft2c_numpy(simulated_data["image"] * phase_map, fftshift_dim=(-2, -1))
         kspace_ref = fft2c_numpy(simulated_data["image"], fftshift_dim=(-2, -1))
         frame_idx = int(np.where(simulated_data["delta_phis"] == max_phase)[0])
         return {
-            "kspace": kspace,
-            "kspace_ref": kspace_ref,
+            "kspace": kspace.astype(np.complex64),
+            "kspace_ref": kspace_ref.astype(np.complex64),
             "tmap_mask": np.ones(kspace.shape),
             "file_name": simulated_data["fname"],
             "frame_idx": frame_idx,

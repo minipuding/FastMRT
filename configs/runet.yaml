@@ -4,7 +4,7 @@ DIRECT:
   DATA:
     DATA_FORMAT: 'RF'           # Fixed Param
     BATCH_SIZE: 8               # Variable Param 01 recommend 16
-    SAMPLING_MODE: 'RANDOM'     # Variable Param 02
+    SAMPLING_MODE: 'EQUISPACED'     # Variable Param 02
     ACCELERATION: 4             # Variable Param 03
     CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
     RESIZE_SIZE: [224, 224]     # Variable Param 05 recommend 256
@@ -34,7 +34,7 @@ PRETRAIN:
   DATA:
     DATA_FORMAT: 'RF'           # Fixed Param
     BATCH_SIZE: 128               # Variable Param 01 recommend 16
-    SAMPLING_MODE: 'RANDOM'     # Variable Param 02
+    SAMPLING_MODE: 'EQUISPACED'     # Variable Param 02
     ACCELERATION: 4             # Variable Param 03
     CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
     RESIZE_SIZE: [224, 224]     # Variable Param 05 recommend 256
@@ -47,13 +47,13 @@ PRETRAIN:
     DROP_PROB: 0.0              # Variable Param 09 毫无影响
     LEAKYRELU_SLOPE: 0.1        # Variable Param 10 recommend 0.1
     LAST_LAYER_WITH_ACT: False  # Variable Param 11 几乎无影响
-    LR: 1e-5                    # Variable Param 12 recommend 1e-3
-    LR_STEP_SIZE: 100            # Variable Param 13
+    LR: 1e-3                    # Variable Param 12 recommend 1e-3
+    LR_STEP_SIZE: 50            # Variable Param 13
     LR_GAMMA: 0.1               # Variable Param 14
     WEIGHT_DECAY: 0             # Variable Param 15 recommend 1e-4
-    MAX_EPOCHS: 1000            # Independent Param
+    MAX_EPOCHS: 300            # Independent Param
   LOG:
-    LOG_NAME: 'pretrain_runet'  # Independent Param
+    LOG_NAME: 'pretrain_runet_imgnet_lr1e-3'  # Independent Param
     LOG_IMAGES_FRAME_IDX: 8     # Independent Param recommend 3 ~ 7
     LOG_IMAGES_FREQ: 50         # Independent Param
     TMAP_PATCH_RATE: 4          # Independent Param
@@ -67,6 +67,11 @@ PRETRAIN:
     SF_RANDOM_CROP_SIZE: 96
     SF_MAX_DELTA_TEMP: 30
 
+FINE_TUNE:
+  MODEL:
+    MODEL_DIR: "./logs/PRETRAIN_RUNET/23gx9vmb/checkpoints/epoch=299-step=52800.ckpt"
+#    MODEL_DIR: "/home/sxu/SJTU/FastMRT/fastMRT/Codes/logs/RUNET/2qfi9s64/checkpoints/epoch=149-step=38100.ckpt"
+    LR: 5e-5
 
 
 

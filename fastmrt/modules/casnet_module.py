@@ -57,24 +57,21 @@ class CasNetModule(BaseModule):
         )
 
     def training_step(self, batch, batch_idx):
-        outputs = self.model(batch.input, batch.origin_shape, batch.mask)
-        train_loss = torch.tensor(0, dtype=torch.float32, device="cuda")
-        for output in outputs:
-            train_loss += F.l1_loss(output, batch.label)
-        train_loss = train_loss / len(outputs)
+        output = self.model(batch.input, batch.origin_shape, batch.mask)
+        train_loss = F.l1_loss(output, batch.label)
         return {"loss": train_loss}
 
     def validation_step(self, batch, batch_idx):
-        outputs = self.model(batch.input, batch.origin_shape, batch.mask)
-        output_refs = self.model(batch.input_ref, batch.origin_shape, batch.mask)
-        val_loss = F.l1_loss(outputs[-1], batch.label)
+        output = self.model(batch.input, batch.origin_shape, batch.mask)
+        output_ref = self.model(batch.input_ref, batch.origin_shape, batch.mask)
+        val_loss = F.l1_loss(output, batch.label)
         return {
             "input": batch.input,
             "label": batch.label,
-            "output": outputs[-1],
+            "output": output,
             "input_ref": batch.input_ref,
             "label_ref": batch.label_ref,
-            "output_ref": output_refs[-1],
+            "output_ref": output_ref,
             "tmap_mask": batch.tmap_mask,
             "val_loss": val_loss,
             "file_name": batch.file_name,

@@ -19,24 +19,6 @@ from fastmrt.modules.rftnet_module import RFTNetModule
 from fastmrt.models.runet import Unet
 from fastmrt.pretrain.transforms import FastmrtPretrainTransform
 
-# class Hparams(NamedTuple):
-#     net: str
-#     batch_size: int
-#     acceleration: int
-#     center_fraction: float
-#     resize_size: tuple
-#     resize_mode: str
-#
-#     base_channels: int
-#     level_num: int
-#     drop_prob: float
-#     leakyrelu_slope: float
-#     last_layer_with_act: bool
-#     lr: float
-#     lr_step_size: int
-#     lr_gamma: float
-#     weight_decay: float
-#     max_epochs: int
 
 # build args
 def build_args():
@@ -96,7 +78,7 @@ def run(args):
         ))
 
         # Obtain Transforms
-        if args.stage == 'train':
+        if args.stage == 'train' or args.stage == 'fine-tune':
             project_name = "RUNET"
             dataset_type = "2D"
             root = args.data_dir
@@ -176,6 +158,11 @@ def run(args):
                                  log_images_frame_idx=args.log_images_frame_idx,
                                  log_images_freq=args.log_images_freq)
 
+        # Judge whether the stage is ``fine-tune``
+        if args.stage == "fine-tune":
+            unet_module.load_state_dict(torch.load(args.model_dir)["state_dict"])
+            # unet_module.model.down_convs.requires_grad_(False)  # freeze encoder
+
         # Create Logger & Add Hparams
         logger = loggers.WandbLogger(save_dir=args.log_dir, name=args.log_name, project=project_name)
         hparams = {
@@ -201,7 +188,8 @@ def run(args):
         logger.log_hyperparams(hparams)
 
         # Create Traner
-        trainer = pl.Trainer(gpus=[0],
+        trainer = pl.Trainer(gpus=[1, 0],
+                             strategy='ddp',
                              enable_progress_bar=False,
                              max_epochs=args.max_epochs,
                              logger=logger)

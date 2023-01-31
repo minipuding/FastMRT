@@ -54,6 +54,7 @@ class UNetSample(NamedTuple):
     slice_idx: int
     coil_idx: int
 
+
 class CasNetSample(NamedTuple):
     # For training
     input: torch.Tensor
@@ -130,7 +131,7 @@ class UNetDataTransform:
 
         # apply mask
         tag = f"{data['file_name']}_f{data['frame_idx']}s{data['slice_idx']}c{'coil_idx'}"
-        seed = self._generate_random_seed() if self.use_random_seed is True else tuple(map(ord, tag))
+        seed = None if self.use_random_seed is True else tuple(map(ord, tag))
         mask_kspace, mask, _ = apply_mask(kspace_torch, self.mask_func, seed=seed)
         mask_kspace_ref = kspace_torch_ref * mask
 
@@ -138,30 +139,30 @@ class UNetDataTransform:
         if self.resize_mode == 'on_image':
             # mask kspace
             mask_image = ifft2c_tensor(mask_kspace, self.fftshift_dim)
-            mask_image = resize_on_image(mask_image, self.resize_size)
+            # mask_image = resize_on_image(mask_image, self.resize_size)
             # mask kspace reference
             mask_image_ref = ifft2c_tensor(mask_kspace_ref, self.fftshift_dim)
-            mask_image_ref = resize_on_image(mask_image_ref, self.resize_size)
+            # mask_image_ref = resize_on_image(mask_image_ref, self.resize_size)
             # full image
             full_image = ifft2c_tensor(kspace_torch, self.fftshift_dim)
-            full_image = resize_on_image(full_image, self.resize_size)
+            # full_image = resize_on_image(full_image, self.resize_size)
             # full image reference
             full_image_ref = ifft2c_tensor(kspace_torch_ref, self.fftshift_dim)
-            full_image_ref = resize_on_image(full_image_ref, self.resize_size)
+            # full_image_ref = resize_on_image(full_image_ref, self.resize_size)
 
         elif self.resize_mode == 'on_kspace':
             # mask kspace
-            mask_kspace = resize_on_kspace(mask_kspace, self.resize_size)
+            # mask_kspace = resize_on_kspace(mask_kspace, self.resize_size)
             mask_image = ifft2c_tensor(mask_kspace, self.fftshift_dim)
             # mask kspace reference
-            mask_kspace_ref = resize_on_kspace(mask_kspace_ref, self.resize_size)
+            # mask_kspace_ref = resize_on_kspace(mask_kspace_ref, self.resize_size)
             mask_image_ref = ifft2c_tensor(mask_kspace_ref, self.fftshift_dim)
             # full image
-            full_kspace = resize_on_kspace(kspace_torch, self.resize_size)
-            full_image = ifft2c_tensor(full_kspace, self.fftshift_dim)
+            # full_kspace = resize_on_kspace(kspace_torch, self.resize_size)
+            full_image = ifft2c_tensor(kspace_torch, self.fftshift_dim)
             # full image reference
-            full_kspace_ref = resize_on_kspace(kspace_torch_ref, self.resize_size)
-            full_image_ref = ifft2c_tensor(full_kspace_ref, self.fftshift_dim)
+            # full_kspace_ref = resize_on_kspace(kspace_torch_ref, self.resize_size)
+            full_image_ref = ifft2c_tensor(kspace_torch_ref, self.fftshift_dim)
         else:
             raise ValueError('``resize_type`` must be one of the ``on_image`` and ``on_kspace``, '
                              'but ``{}`` was got.'.format(self.resize_size))
@@ -201,8 +202,8 @@ class UNetDataTransform:
 
         # temperature map mask
         if use_tmap_mask is True:
-            tmap_mask_torch = complex_np_to_complex_tensor(data["tmap_mask"])
-            tmap_mask = resize(tmap_mask_torch, self.resize_size, mode="nearest")
+            tmap_mask = complex_np_to_complex_tensor(data["tmap_mask"])
+            # tmap_mask = resize(tmap_mask_torch, self.resize_size, mode="nearest")
         else:
             tmap_mask = torch.ones(label.shape)
 
@@ -221,11 +222,6 @@ class UNetDataTransform:
             coil_idx=data["coil_idx"],
             origin_shape=kspace_torch.shape,
         )
-
-    @staticmethod
-    def _generate_random_seed():
-        timestamp = "%.20f" % time.time()
-        return int(timestamp[-15:]) % (2**32-1)
 
 
 class CasNetDataTransform:
@@ -264,21 +260,22 @@ class CasNetDataTransform:
         tmap_mask_torch = complex_np_to_complex_tensor(data["tmap_mask"])
 
         # apply mask
-        seed = self._generate_random_seed() if self.use_random_seed is True else None
+        tag = f"{data['file_name']}_f{data['frame_idx']}s{data['slice_idx']}c{'coil_idx'}"
+        seed = None if self.use_random_seed is True else tuple(map(ord, tag))
         mask_kspace, mask, _ = apply_mask(kspace_torch, self.mask_func, seed=seed)
         mask_kspace_ref = kspace_torch_ref * mask
 
         # apply resize by padding on kspace
-        mask_kspace = resize_on_kspace(mask_kspace, self.resize_size)
-        full_kspace = resize_on_kspace(kspace_torch, self.resize_size)
-        mask_kspace_ref = resize_on_kspace(mask_kspace_ref, self.resize_size)
-        full_kspace_ref = resize_on_kspace(kspace_torch_ref, self.resize_size)
+        # mask_kspace = resize_on_kspace(mask_kspace, self.resize_size)
+        # full_kspace = resize_on_kspace(kspace_torch, self.resize_size)
+        # mask_kspace_ref = resize_on_kspace(mask_kspace_ref, self.resize_size)
+        # full_kspace_ref = resize_on_kspace(kspace_torch_ref, self.resize_size)
 
         # apply inverse Fourier transform
         mask_image = ifft2c_tensor(mask_kspace, self.fftshift_dim)
-        full_image = ifft2c_tensor(full_kspace, self.fftshift_dim)
+        full_image = ifft2c_tensor(kspace_torch, self.fftshift_dim)
         mask_image_ref = ifft2c_tensor(mask_kspace_ref, self.fftshift_dim)
-        full_image_ref = ifft2c_tensor(full_kspace_ref, self.fftshift_dim)
+        full_image_ref = ifft2c_tensor(kspace_torch_ref, self.fftshift_dim)
 
         # apply data format transform
         if self.data_format == 'CF':    # Complex Float
@@ -304,7 +301,8 @@ class CasNetDataTransform:
         # label_ref = normalize_apply(label_ref, mean, std, eps=1e-12)
 
         # temperature map mask
-        tmap_mask = resize(tmap_mask_torch, self.resize_size, mode="nearest")
+        # tmap_mask = resize(tmap_mask_torch, self.resize_size, mode="nearest")
+        tmap_mask = tmap_mask_torch
 
         return CasNetSample(
             input=input,
@@ -319,11 +317,6 @@ class CasNetDataTransform:
             slice_idx=data["slice_idx"],
             coil_idx=data["coil_idx"],
         )
-
-    @staticmethod
-    def _generate_random_seed():
-        timestamp = "%.20f" % time.time()
-        return int(timestamp[-15:]) % (2**32-1)
 
 
 class RFTNetDataTransform:
@@ -364,7 +357,8 @@ class RFTNetDataTransform:
         tmap_mask_torch = complex_np_to_complex_tensor(data["tmap_mask"])
 
         # apply mask
-        seed = self._generate_random_seed() if self.use_random_seed is True else None
+        tag = f"{data['file_name']}_f{data['frame_idx']}s{data['slice_idx']}c{'coil_idx'}"
+        seed = None if self.use_random_seed is True else tuple(map(ord, tag))
         mask_kspace, mask, _ = apply_mask(kspace_torch, self.mask_func, seed=seed)
 
         # apply inverse Fourier transform & resize
@@ -425,8 +419,3 @@ class RFTNetDataTransform:
             slice_idx=data["slice_idx"],
             coil_idx=data["coil_idx"],
         )
-
-    @staticmethod
-    def _generate_random_seed():
-        timestamp = "%.20f" % time.time()
-        return int(timestamp[-15:]) % (2**32-1)

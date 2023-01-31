@@ -37,8 +37,9 @@ class FastmrtCLI:
     def runet_cli(parser: ArgumentParser, config: dict):
         # obtain sub configs
         sf_cfg = None
-        if parser.parse_args().stage == "train":
+        if parser.parse_args().stage == "train" or parser.parse_args().stage == "fine-tune":
             sub_config = config["DIRECT"]
+            ft_config = config["FINE_TUNE"]["MODEL"]
         elif parser.parse_args().stage == "pre-train":
             sub_config = config["PRETRAIN"]
             sf_cfg = sub_config["SF"]
@@ -83,8 +84,14 @@ class FastmrtCLI:
                             help="(float, optional) leaky relu slope, default is 0.4")
         parser.add_argument('--last_layer_with_act', type=bool, default=model_cfg["LAST_LAYER_WITH_ACT"],
                             help="(bool, optional) last layer use activation function, default is False")
-        parser.add_argument('--lr', type=float, default=model_cfg["LR"],
-                            help="(float, optional) Learning rate, default is 1e-3")
+        if parser.parse_args().stage == "fine-tune":
+            parser.add_argument('--lr', type=float, default=ft_config["LR"],
+                                help="(float, optional) Learning rate for fine-tune, default is 1e-7")
+            parser.add_argument('--model_dir', type=str, default=ft_config["MODEL_DIR"],
+                                help="(str, optional) Pre-trained model path")
+        else:
+            parser.add_argument('--lr', type=float, default=model_cfg["LR"],
+                                help="(float, optional) Learning rate, default is 1e-3")
         parser.add_argument('--lr_step_size', type=int, default=model_cfg["LR_STEP_SIZE"],
                             help="(int optional) Learning rate step size, default is 40")
         parser.add_argument('--lr_gamma', type=float, default=model_cfg["LR_GAMMA"],

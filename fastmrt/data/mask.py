@@ -5,7 +5,7 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
 
-import contextlib
+from fastmrt.utils.seed import temp_seed
 from typing import Optional, Sequence, Tuple, Union
 import numpy as np
 import torch
@@ -231,22 +231,6 @@ class EquiSpacedMaskFunc(MaskFunc):
         accel_mask[offset::acceleration] = 1
 
         return accel_mask
-
-@contextlib.contextmanager
-def temp_seed(rng: np.random.RandomState, seed: Optional[Union[int, Tuple[int, ...]]]):
-    """A context manager for temporarily adjusting the random seed."""
-    if seed is None:
-        try:
-            yield
-        finally:
-            pass
-    else:
-        state = rng.get_state()
-        rng.seed(seed)
-        try:
-            yield
-        finally:
-            rng.set_state(state)
 
 def apply_mask(data: torch.Tensor,
                mask_func: MaskFunc,
