@@ -1,10 +1,12 @@
 import os.path
 
 import pytorch_lightning as pl
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Sampler
 from fastmrt.data.dataset import SliceDataset, VolumeDataset
 from fastmrt.pretrain.mri_data import SliceDataset as pt_SliceDataset
 from fastmrt.pretrain.imagenet_data import ImagenetDataset as pt_ImagenetDataset
+from fastmrt.pretrain.imagenet_data import ContractLearningRandomSampler, ContractLearningCollateFunction
+from fastmrt.pretrain.imagenet_data import ContractLearningCollateFunctionV2
 from pathlib import Path
 from typing import Callable, Any
 
@@ -17,7 +19,7 @@ class FastmrtDataModule(pl.LightningDataModule):
             val_transform: Callable,
             test_transform: Callable,
             batch_size: int = 16,
-            dataset_type: str = '2D'
+            dataset_type: str = '2D',
     ):
         super(FastmrtDataModule, self).__init__()
         self.root = root
@@ -26,6 +28,8 @@ class FastmrtDataModule(pl.LightningDataModule):
         self.test_transform = test_transform
         self.batch_size = batch_size
         self.dataset_type = dataset_type
+        self.sampler = None,
+        self.collate_fn = None,
 
     def train_dataloader(self):
         return self._create_dataloader(stage='train', transform=self.train_transform)
@@ -42,17 +46,18 @@ class FastmrtDataModule(pl.LightningDataModule):
             transform: Callable = None,
     ) -> DataLoader[Any]:
         data_path = os.path.join(self.root, stage)
-        is_train = True
+        shuffle = True
 
         # choose transform depend on stage
         if stage == 'train':
-            transform = self.train_transform
+            transform = None
+            # transform = self.train_transform
         elif stage == 'val':
             transform = self.val_transform
-            is_train = False
+            shuffle = False
         elif stage == 'test':
             transform = self.test_transform
-            is_train = False
+            shuffle = False
 
         # load dataset
         if self.dataset_type == '2D':
@@ -65,12 +70,26 @@ class FastmrtDataModule(pl.LightningDataModule):
         else:
             raise ValueError("``dataset_type`` must be one of ``2D``, ``3D`` and ``T-3D``")
 
+        if stage == "train":
+            # self.sampler = ContractLearningRandomSampler(data_source=dataset, batch_size=self.batch_size)
+            self.collate_fn = ContractLearningCollateFunctionV2(self.train_transform,
+                                                                phs_aug=True,
+                                                                use_augs=False,
+                                                                n_views=4)
+            # shuffle = False
+        else:
+            self.sampler = None
+            self.collate_fn = None
+
         # generate dataloader
         dataloader = DataLoader(
             dataset=dataset,
             batch_size=self.batch_size,
-            shuffle=is_train,
+            shuffle=shuffle,
             num_workers=12,
+            drop_last=True,
+            # sampler=self.sampler,
+            collate_fn=self.collate_fn,
         )
 
         return dataloader

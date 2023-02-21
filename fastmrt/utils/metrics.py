@@ -36,7 +36,7 @@ class FastmrtMetrics:
         psnr_metric = torch.tensor(0, dtype=torch.float32, device='cuda')
         for batch_idx in range(pred.shape[0]):
             mse = torch.mean((pred[batch_idx] - gt[batch_idx]) ** 2)
-            psnr_metric += 10 * torch.log10(gt[batch_idx].max() ** 2 / mse)
+            psnr_metric += 10 * torch.log10(gt[batch_idx].max() ** 2 / mse + 1.0)
         return psnr_metric / pred.shape[0]
 
     @staticmethod

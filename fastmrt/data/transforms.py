@@ -1,17 +1,20 @@
+import random
 import time
-from typing import Dict, NamedTuple, Union, Tuple
+from typing import Dict, NamedTuple, Union, Tuple, List
 import torch
 from fastmrt.data.mask import MaskFunc, apply_mask
 from fastmrt.data.prf import PrfFunc
 from fastmrt.utils.trans import (
-    complex_np_to_complex_tensor,
     complex_tensor_to_real_tensor,
     complex_tensor_to_amp_phase_tensor,
 )
+from fastmrt.utils.trans import real_np_to_complex_np as rn2cn
+from fastmrt.utils.trans import complex_np_to_real_np as cn2rn
 from fastmrt.utils.fftc import ifft2c_tensor
 from fastmrt.utils.resize import resize, resize_on_kspace, resize_on_image
 from fastmrt.utils.normalize import normalize_apply, normalize_paras
 import numpy as np
+import albumentations as A
 
 
 class Default(NamedTuple):
@@ -26,8 +29,8 @@ class DefaultTransform():
             kspace: np.ndarray,
             target: np.ndarray,
     ):
-        kspace_torch = complex_np_to_complex_tensor(kspace)
-        target_torch = complex_np_to_complex_tensor(target)
+        kspace_torch = torch.from_numpy(kspace)
+        target_torch = torch.from_numpy(target)
 
         return Default(
             kspace_torch=kspace_torch,
@@ -105,7 +108,7 @@ class UNetDataTransform:
             use_random_seed: bool = True,
             resize_size: Tuple[int, ...] = (224, 224),
             resize_mode: str = 'on_kspace',
-            fftshift_dim: Union[int, Tuple[int, int]] = -2,
+            fftshift_dim: Union[int, Tuple[int, int]] = (-2, -1),
     ):
         """
 
@@ -126,8 +129,8 @@ class UNetDataTransform:
     ) -> UNetSample:
 
         # to tensor
-        kspace_torch = complex_np_to_complex_tensor(data["kspace"])
-        kspace_torch_ref = complex_np_to_complex_tensor(data["kspace_ref"])
+        kspace_torch = torch.from_numpy(data["kspace"])
+        kspace_torch_ref = torch.from_numpy(data["kspace_ref"])
 
         # apply mask
         tag = f"{data['file_name']}_f{data['frame_idx']}s{data['slice_idx']}c{'coil_idx'}"
@@ -202,7 +205,7 @@ class UNetDataTransform:
 
         # temperature map mask
         if use_tmap_mask is True:
-            tmap_mask = complex_np_to_complex_tensor(data["tmap_mask"])
+            tmap_mask = torch.from_numpy(data["tmap_mask"])
             # tmap_mask = resize(tmap_mask_torch, self.resize_size, mode="nearest")
         else:
             tmap_mask = torch.ones(label.shape)
@@ -236,7 +239,7 @@ class CasNetDataTransform:
             data_format: str = 'RF',
             use_random_seed: bool = True,
             resize_size: list[int, ...] = (256, 256),
-            fftshift_dim: Union[int, Tuple[int, int]] = -2,
+            fftshift_dim: Union[int, Tuple[int, int]] = (-2, -1),
     ):
         """
 
@@ -255,9 +258,9 @@ class CasNetDataTransform:
     ) -> CasNetSample:
 
         # to tensor
-        kspace_torch = complex_np_to_complex_tensor(data["kspace"])
-        kspace_torch_ref = complex_np_to_complex_tensor(data["kspace_ref"])
-        tmap_mask_torch = complex_np_to_complex_tensor(data["tmap_mask"])
+        kspace_torch = torch.from_numpy(data["kspace"])
+        kspace_torch_ref = torch.from_numpy(data["kspace_ref"])
+        tmap_mask_torch = torch.from_numpy(data["tmap_mask"])
 
         # apply mask
         tag = f"{data['file_name']}_f{data['frame_idx']}s{data['slice_idx']}c{'coil_idx'}"
@@ -278,7 +281,7 @@ class CasNetDataTransform:
         full_image_ref = ifft2c_tensor(kspace_torch_ref, self.fftshift_dim)
 
         # apply data format transform
-        if self.data_format == 'CF':    # Complex Float
+        if self.data_format == 'CF':  # Complex Float
             input = mask_image
             label = full_image
             input_ref = mask_image_ref
@@ -332,7 +335,7 @@ class RFTNetDataTransform:
             use_random_seed: bool = True,
             resize_size: list[int, ...] = (256, 256),
             resize_mode: str = 'on_kspace',
-            fftshift_dim: Union[int, Tuple[int, int]] = -2,
+            fftshift_dim: Union[int, Tuple[int, int]] = (-2, -1),
     ):
         """
 
@@ -352,9 +355,9 @@ class RFTNetDataTransform:
     ) -> RFTNetSample:
 
         # to tensor
-        kspace_torch = complex_np_to_complex_tensor(data["kspace"])
-        kspace_torch_ref = complex_np_to_complex_tensor(data["kspace_ref"])
-        tmap_mask_torch = complex_np_to_complex_tensor(data["tmap_mask"])
+        kspace_torch = torch.from_numpy(data["kspace"])
+        kspace_torch_ref = torch.from_numpy(data["kspace_ref"])
+        tmap_mask_torch = torch.from_numpy(data["tmap_mask"])
 
         # apply mask
         tag = f"{data['file_name']}_f{data['frame_idx']}s{data['slice_idx']}c{'coil_idx'}"
@@ -388,7 +391,7 @@ class RFTNetDataTransform:
                              'but ``{}`` was got.'.format(self.resize_size))
 
         # apply data format transform
-        if self.data_format == 'CF':    # Complex Float
+        if self.data_format == 'CF':  # Complex Float
             input = mask_image
             label_img = full_image
             label_ref = full_image_ref
@@ -419,3 +422,69 @@ class RFTNetDataTransform:
             slice_idx=data["slice_idx"],
             coil_idx=data["coil_idx"],
         )
+
+
+class ComposeTransform:
+
+    def __init__(self, transforms):
+        self.transforms = transforms
+
+    def __call__(self, x):
+        for tran in self.transforms:
+            x = tran(x)
+        return x
+
+    def items(self):
+        return self.transforms
+
+
+class ComplexAugs:
+
+    def __init__(self,
+                 strategy: Dict,
+                 height: int,
+                 width: int,
+                 crop_scale: tuple[float, float] = (0.7, 1.0),
+                 gamma_limit: Union[float, tuple[float, float]] = (99, 101),
+                 noise_var_limit: Union[tuple[float, float], float] = (0.5, 1.0),
+                 blur_limit: Union[int, tuple[int, int]] = (1, 5),):
+        self.strategy = strategy
+        if self.strategy["compose_num"] is None:
+            self.strategy["compose_num"] = len(self.strategy["augs"])
+        self.crop = A.RandomResizedCrop(height=height, width=width, scale=crop_scale)
+        self.flip = A.Flip()
+        self.rotate = A.RandomRotate90()
+        self.gamma = A.RandomGamma(gamma_limit=gamma_limit)
+        self.noise = A.GaussNoise(var_limit=noise_var_limit)
+        self.blur = A.GaussianBlur(blur_limit=blur_limit)
+
+    def __call__(self, sample, tmap_mask):
+        objs = self.strategy["objs"]
+        assert isinstance(objs, List)
+        amp = np.abs(sample)
+        phs = cn2rn(sample / amp)
+        phs_mask = np.concatenate((phs, tmap_mask[np.newaxis, :]), axis=0).transpose([1, 2, 0])
+        if "amp" in objs:
+            amp = self.apply_augs(amp)
+        if "phs" in objs:
+            phs_mask = self.apply_augs(phs_mask).transpose([-1, 0, 1])
+            phs = rn2cn(phs_mask[:2])
+            tmap_mask = phs_mask[-1]
+        return amp * phs, tmap_mask
+
+    def apply_augs(self, x):
+        augs = random.sample(self.strategy["augs"], self.strategy["compose_num"])
+        assert isinstance(augs, List)
+        if "crop" in augs:
+            x = self.crop(image=x)["image"]
+        if "flip" in augs:
+            x = self.flip(image=x)["image"]
+        if "rotate" in augs:
+            x = self.rotate(image=x)["image"]
+        if "noise" in augs:
+            x = self.noise(image=x)["image"]
+        if "blur" in augs:
+            x = self.blur(image=x)["image"]
+        if "gamma" in augs:
+            x = self.gamma(image=x)["image"]
+        return x

@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 
-def fft2c_tensor(data : torch.Tensor, fftshift_dim: Optional[Union[int, Tuple[int, int]]] = -2) -> torch.Tensor:
+def fft2c_tensor(data : torch.Tensor, fftshift_dim: Optional[Union[int, Tuple[int, int]]] = (-2, -1)) -> torch.Tensor:
     """
         Apply centered 2 dimensional Fast Fourier Transform for tensor data.
 
@@ -26,13 +26,13 @@ def fft2c_tensor(data : torch.Tensor, fftshift_dim: Optional[Union[int, Tuple[in
     if torch.is_complex(data) is False:
         raise ValueError("Narray does not complex type.")
 
-    data = torch.fft.fftshift(data, dim=fftshift_dim)
+    data = torch.fft.ifftshift(data, dim=fftshift_dim)
     data = torch.fft.fftn(data, dim=(-2, -1))
-    data = torch.fft.ifftshift(data)
+    data = torch.fft.fftshift(data)
 
     return data
 
-def ifft2c_tensor(data : torch.Tensor, fftshift_dim: Optional[Union[int, Tuple[int]]] = -2) -> torch.Tensor:
+def ifft2c_tensor(data : torch.Tensor, fftshift_dim: Optional[Union[int, Tuple[int, int]]] = (-2,-1)) -> torch.Tensor:
     """
         Apply centered 2-dimensional Inverse Fast Fourier Transform for tensor data.
 
@@ -54,7 +54,7 @@ def ifft2c_tensor(data : torch.Tensor, fftshift_dim: Optional[Union[int, Tuple[i
 
     return data
 
-def fft2c_numpy(data : np.complex, fftshift_dim: Optional[Union[int, Tuple[int, int]]] = -2) -> np.complex:
+def fft2c_numpy(data : np.complex, fftshift_dim: Optional[Union[int, Tuple[int, int]]] = (-2,-1)) -> np.complex:
     """
         Apply centered 2 dimensional Fast Fourier Transform for numpy data.
 
@@ -68,13 +68,13 @@ def fft2c_numpy(data : np.complex, fftshift_dim: Optional[Union[int, Tuple[int, 
     if np.iscomplex(data) is False:
         raise ValueError("Narray does not complex type.")
 
-    data = np.fft.fftshift(data, axes=fftshift_dim)
+    data = np.fft.ifftshift(data, axes=fftshift_dim)
     data = np.fft.fftn(data, axes=(-2, -1))
-    data = np.fft.ifftshift(data)
+    data = np.fft.fftshift(data)
 
-    return data
+    return data.astype(np.complex64)
 
-def ifft2c_numpy(data : np.complex, fftshift_dim: Optional[Union[int, Tuple[int,...]]] = -2) -> np.complex:
+def ifft2c_numpy(data : np.complex, fftshift_dim: Optional[Union[int, Tuple[int,...]]] = (-2,-1)) -> np.complex:
     """
         Apply centered 2-dimensional Inverse Fast Fourier Transform for numpy data.
 
@@ -92,4 +92,4 @@ def ifft2c_numpy(data : np.complex, fftshift_dim: Optional[Union[int, Tuple[int,
     data = np.fft.ifftn(data, axes=(-2, -1))
     data = np.fft.fftshift(data, axes=fftshift_dim)
 
-    return data
+    return data.astype(np.complex64)
