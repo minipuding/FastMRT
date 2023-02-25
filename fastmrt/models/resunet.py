@@ -200,12 +200,6 @@ class UNet(nn.Module):
                 self.downblocks.append(DownSample(now_ch))
                 chs.append(now_ch)
 
-        self.projection = nn.Sequential(
-            nn.Linear(in_features=(int(96 / (2 ** (len(ch_mult)-1))) ** 2 * out_ch), out_features=out_ch * 4),
-            nn.ReLU(),
-            nn.Linear(in_features=out_ch * 4, out_features=out_ch)
-        )
-
         # 实例化U-Net编码器和解码器的过渡层，由两个残差块组成
         # 这里我不明白为什么第一个残差块加attention, 第二个不加……问就是``工程科学``
         self.middleblocks = nn.ModuleList([
@@ -262,14 +256,6 @@ class UNet(nn.Module):
 
         assert len(hs) == 0
         return h
-
-    def cl_forward_v2(self, input: torch.Tensor) -> torch.Tensor:
-        output = self.head(input)
-        for layer in self.downblocks:
-            output = layer(output)
-
-        cl_embedding = self.projection(output.flatten(start_dim=1, end_dim=-1))
-        return cl_embedding
 
 
 if __name__ == '__main__':

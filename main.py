@@ -13,6 +13,7 @@ from fastmrt.data.dataset import SliceDataset
 from fastmrt.data.mask import RandomMaskFunc, EquiSpacedMaskFunc, apply_mask
 from fastmrt.data.transforms import UNetDataTransform, CasNetDataTransform, RFTNetDataTransform, ComposeTransform
 from fastmrt.data.prf import PrfHeader, PrfFunc
+from fastmrt.data.augs import AugsCollateFunction
 from fastmrt.modules.data_module import FastmrtDataModule
 from fastmrt.modules.unet_module import UNetModule
 from fastmrt.modules.casnet_module import CasNetModule
@@ -82,7 +83,7 @@ def run(args):
         ))
 
         # Obtain Transforms
-        project_name = "RUNET"
+        project_name = "AUGS"
         dataset_type = "2D"
         root = args.data_dir
         train_transform = UNetDataTransform(mask_func=mask_func,
@@ -99,6 +100,16 @@ def run(args):
                                           resize_size=args.resize_size,
                                           resize_mode=args.resize_mode,
                                           fftshift_dim=(-2, -1))
+
+        # define augs
+        collate_fn = AugsCollateFunction(transforms=train_transform,
+                                         ap_shuffle=args.ap_shuffle,
+                                         union=args.union,
+                                         objs=args.objs,
+                                         ap_logic=args.ap_logic,
+                                         augs_list=args.augs_list,
+                                         compose_num=args.compose_num
+                                         )
         if args.stage == 'pre-train':
             project_name = "PRETRAIN_RUNET"
             dataset_type = "PT"
@@ -125,7 +136,8 @@ def run(args):
                                         val_transform=val_transform,
                                         test_transform=val_transform,
                                         batch_size=args.batch_size,
-                                        dataset_type=dataset_type)
+                                        dataset_type=dataset_type,
+                                        collate_fn=collate_fn)
 
         # Create RUnet Module
         # args.lr *= gpus_num
@@ -161,9 +173,7 @@ def run(args):
             "sampling_mode": args.sampling_mode,
             "acceleration": args.acceleration,
             "center_fraction": args.center_fraction,
-            "resize_size": args.resize_size,
-            "resize_mode": args.resize_mode,
-
+            "params": "%.2fM" % (sum([param.nelement() for param in unet_module.model.parameters()]) / 1e6),
             "base_channels": args.base_channels,
             "level_num": args.level_num,
             "drop_prob": args.drop_prob,
@@ -174,12 +184,18 @@ def run(args):
             "lr_gamma": args.lr_gamma,
             "weight_decay": args.weight_decay,
             "max_epochs": args.max_epochs,
+            "augs-ap_shuffle": args.ap_shuffle,
+            "augs-union": args.union,
+            "augs-objs": args.objs,
+            "augs-ap_logic": args.ap_logic,
+            "augs-augs_list": args.augs_list,
+            "augs-compose_num": args.compose_num,
         }
         logger.log_hyperparams(hparams)
 
         # Create Traner
         strategy = 'ddp' if gpus_num > 1 else None
-        print(strategy)
+
         trainer = pl.Trainer(gpus=args.gpus,
                              strategy=strategy,
                              enable_progress_bar=False,

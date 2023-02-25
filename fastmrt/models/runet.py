@@ -40,12 +40,6 @@ class Unet(nn.Module):
                                              leakyrelu_slope=self.leakyrelu_slope))
             temp_channels *= 2
 
-        self.projection = nn.Sequential(
-            nn.Linear(in_features=(int(96 / (2 ** level_num)) ** 2 * temp_channels), out_features=cl_dim * 4),
-            nn.ReLU(),
-            nn.Linear(in_features=cl_dim * 4, out_features=cl_dim)
-        )
-
         self.up_convs = nn.ModuleList()
         self.up_transpose_convs = nn.ModuleList()
         for _ in range(self.level_num):
@@ -80,36 +74,6 @@ class Unet(nn.Module):
             output = torch.cat([output, down_conv_feature], dim=1)
             output = up_conv_layer(output)
         return output
-
-    def cl_forward(self, input: torch.Tensor) -> tuple[Any, Any]:
-        output = input
-        stack = []
-        for layer in self.down_convs[:-1]:
-            output = layer(output)
-            stack.append(output)
-            output = F.max_pool2d(output, 2)
-        output = self.down_convs[-1](output)
-
-        cl_embedding = self.projection(output.flatten(start_dim=1, end_dim=-1))
-
-        for up_conv_layer, up_transpose_conv_layer in zip(self.up_convs, self.up_transpose_convs):
-            output = up_transpose_conv_layer(output)
-            down_conv_feature = stack.pop()
-            output = torch.cat([output, down_conv_feature], dim=1)
-            output = up_conv_layer(output)
-        return output, cl_embedding
-
-    def cl_forward_v2(self, input: torch.Tensor) -> torch.Tensor:
-        output = input
-        stack = []
-        for layer in self.down_convs[:-1]:
-            output = layer(output)
-            stack.append(output)
-            output = F.max_pool2d(output, 2)
-        output = self.down_convs[-1](output)
-
-        cl_embedding = self.projection(output.flatten(start_dim=1, end_dim=-1))
-        return cl_embedding
 
 
 class ConvBlock(nn.Module):
