@@ -17,7 +17,6 @@ class Unet(nn.Module):
         drop_prob: float = 0.0,
         leakyrelu_slope: float = 0.4,
         last_layer_with_act: bool = False,
-        cl_dim: int = 128,
     ):
         super().__init__()
         self.in_channels = in_channels
