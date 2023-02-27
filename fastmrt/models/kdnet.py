@@ -10,7 +10,7 @@ class KDNet(nn.Module):
                  use_ema: bool = False,
                  soft_label_weight: float = 2.0):
         super(KDNet, self).__init__()
-        self.tea_net = tea_net.eval()
+        self.tea_net = tea_net
         self.stu_net = stu_net
 
         self.use_ema = use_ema
@@ -18,8 +18,7 @@ class KDNet(nn.Module):
 
     def forward(self, input_stu: torch.Tensor, input_tea=None):
         if input_tea is not None:
-            with torch.no_grad():
-                output_tea = self.tea_net(input_tea)
+            output_tea = self.tea_net(input_tea)
         else:
             output_tea = None
         output_stu = self.stu_net(input_stu)
