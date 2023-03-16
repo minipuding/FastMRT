@@ -1,14 +1,15 @@
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
-from fastmrt.models.runet import Unet
+from fastmrt.models.cunet import Unet
 from fastmrt.modules.base_module import BaseModule
 from fastmrt.utils.normalize import denormalize
 from fastmrt.data.prf import PrfFunc
-from fastmrt.utils.trans import real_tensor_to_complex_tensor as rt2ct
+from fastmrt.utils.trans import complex_tensor_to_real_tensor as ct2rt
+import pdb
 
 
-class UNetModule(BaseModule):
+class CUNetModule(BaseModule):
     def __init__(
             self,
             in_channels: int,
@@ -29,12 +30,12 @@ class UNetModule(BaseModule):
             log_images_frame_idx: int = 5,  # recommend 4 ~ 8
             log_images_freq: int = 50,
     ):
-        super(UNetModule, self).__init__(tmap_prf_func=tmap_prf_func,
-                                         tmap_patch_rate=tmap_patch_rate,
-                                         tmap_max_temp_thresh=tmap_max_temp_thresh,
-                                         tmap_ablation_thresh=tmap_ablation_thresh,
-                                         log_images_frame_idx=log_images_frame_idx,
-                                         log_images_freq=log_images_freq)
+        super(CUNetModule, self).__init__(tmap_prf_func=tmap_prf_func,
+                                          tmap_patch_rate=tmap_patch_rate,
+                                          tmap_max_temp_thresh=tmap_max_temp_thresh,
+                                          tmap_ablation_thresh=tmap_ablation_thresh,
+                                          log_images_frame_idx=log_images_frame_idx,
+                                          log_images_freq=log_images_freq)
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.base_channels = base_channels
@@ -57,8 +58,12 @@ class UNetModule(BaseModule):
 
     def training_step(self, batch, batch_idx):
         output = self.model(batch.input)
-        train_loss = F.l1_loss(output, batch.label)
-
+        train_loss = F.l1_loss(output.real, batch.label.real) + F.l1_loss(output.imag, batch.label.imag)
+        if torch.sum(torch.isnan(output.real)) != 0 or torch.sum(torch.isnan(output.imag)):
+            print(torch.sum(torch.isnan(output.real)))
+            print(torch.sum(torch.isnan(output.imag)))
+            import pdb
+            pdb.set_trace()
         return {"loss": train_loss}
 
     def validation_step(self, batch, batch_idx):
@@ -68,12 +73,12 @@ class UNetModule(BaseModule):
         mean = batch.mean.unsqueeze(1).unsqueeze(2).unsqueeze(3)
         std = batch.std.unsqueeze(1).unsqueeze(2).unsqueeze(3)
         return {
-            "input": denormalize(batch.input, mean, std),
-            "label": denormalize(batch.label, mean, std),
-            "output": denormalize(output, mean, std),
-            "input_ref": denormalize(batch.input_ref, mean, std),
-            "label_ref": denormalize(batch.label_ref, mean, std),
-            "output_ref": denormalize(output_ref, mean, std),
+            "input": ct2rt(denormalize(batch.input, mean, std).squeeze(1)),
+            "label": ct2rt(denormalize(batch.label, mean, std).squeeze(1)),
+            "output": ct2rt(denormalize(output, mean, std).squeeze(1)),
+            "input_ref": ct2rt(denormalize(batch.input_ref, mean, std).squeeze(1)),
+            "label_ref": ct2rt(denormalize(batch.label_ref, mean, std).squeeze(1)),
+            "output_ref": ct2rt(denormalize(output_ref, mean, std).squeeze(1)),
             "tmap_mask": batch.tmap_mask,
             "val_loss": val_loss,
             "file_name": batch.file_name,
@@ -104,14 +109,11 @@ class UNetModule(BaseModule):
         }
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(),
-                                     lr=self.lr,
-                                     weight_decay=self.weight_decay)
-        # scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer,
-        #                                             step_size=self.lr_step_size,
-        #                                             gamma=self.lr_gamma)
+        optimizer = torch.optim.AdamW(self.parameters(),
+                                      lr=self.lr,
+                                      weight_decay=self.weight_decay)
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,
-                                                               T_max=300,
+                                                               T_max=200,
                                                                last_epoch=-1)
         return [optimizer], [scheduler]

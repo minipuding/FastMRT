@@ -72,7 +72,6 @@ class Unet(nn.Module):
             output = up_conv_layer(output)
         return output
 
-
 class ConvBlock(nn.Module):
 
     def __init__(

@@ -169,10 +169,10 @@ class UNetDataTransform:
 
         # apply data format transform
         if self.data_format == 'CF':    # Complex Float
-            input = mask_image
-            label = full_image
-            input_ref = mask_image_ref
-            label_ref = full_image_ref
+            input = mask_image.unsqueeze(0)
+            label = full_image.unsqueeze(0)
+            input_ref = mask_image_ref.unsqueeze(0)
+            label_ref = full_image_ref.unsqueeze(0)
         elif self.data_format == 'RF':  # Real Float
             input = complex_tensor_to_real_tensor(mask_image, mode='CHW')
             label = complex_tensor_to_real_tensor(full_image, mode='CHW')

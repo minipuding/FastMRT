@@ -17,7 +17,9 @@ class FastmrtDataModule(pl.LightningDataModule):
             val_transform: Callable,
             test_transform: Callable,
             batch_size: int = 16,
-            dataset_type: str = '2D'
+            dataset_type: str = '2D',
+            work_init_fn: Any = None,
+            generator: Any = None,
     ):
         super(FastmrtDataModule, self).__init__()
         self.root = root
@@ -26,6 +28,8 @@ class FastmrtDataModule(pl.LightningDataModule):
         self.test_transform = test_transform
         self.batch_size = batch_size
         self.dataset_type = dataset_type
+        self.work_init_fn = work_init_fn
+        self.generator = generator
 
     def train_dataloader(self):
         return self._create_dataloader(stage='train', transform=self.train_transform)
@@ -70,7 +74,9 @@ class FastmrtDataModule(pl.LightningDataModule):
             dataset=dataset,
             batch_size=self.batch_size,
             shuffle=is_train,
-            num_workers=12,
+            num_workers=6,
+            worker_init_fn=self.work_init_fn,
+            generator=self.generator
         )
 
         return dataloader
