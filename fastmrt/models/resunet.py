@@ -3,6 +3,7 @@ import torch
 from torch import nn
 from torch.nn import init
 from torch.nn import functional as F
+from typing import List
 
 
 class Swish(nn.Module):
@@ -162,38 +163,30 @@ class ResBlock(nn.Module):
 
 class UNet(nn.Module):
     def __init__(self,
-                 inout_ch,
-                 ch,
-                 ch_mult,
-                 attn,
-                 num_res_blocks,
-                 dropout):
-        """
-
-        Args:
-            ch: int, UNet第一层卷积的通道数，每下采样一次在这基础上翻倍, 本实例中ch=128
-            ch_mult: list, UNet每次下采样通道数翻倍的乘数，本实例中ch_mult=[1,2,3,4]
-            attn: list, 表示在第几次降采样中使用attention
-            num_res_blocks: int, 降采样或者上采样中每一层次的残差模块数目
-            dropout: float, dropout比率
-        """
+                 in_channels: int,
+                 out_channels: int,
+                 base_channels: int=32,
+                 ch_mult: List[int]=[1,2,2,2],
+                 attn: List[int]=[3],
+                 num_res_blocks: int=2,
+                 drop_prob: float=0.1):
         super().__init__()
         # assert确保需要加attention的位置小于总降采样次数
         assert all([i < len(ch_mult) for i in attn]), 'attn index out of bound'
         # 实例化头部卷积层
-        self.head = nn.Conv2d(inout_ch, ch, kernel_size=3, stride=1, padding=1)
+        self.head = nn.Conv2d(in_channels, base_channels, kernel_size=3, stride=1, padding=1)
 
         # 实例化U-Net的编码器部分，即降采样部分，每一层次由``num_res_blocks``个残差块组成
         # 其中chs用于记录降采样过程中的各阶段通道数，now_ch表示当前阶段的通道数
         self.downblocks = nn.ModuleList()
-        chs = [ch]  # record output channel when dowmsample for upsample
-        now_ch = ch
+        chs = [base_channels]  # record output channel when dowmsample for upsample
+        now_ch = base_channels
         for i, mult in enumerate(ch_mult):  # i表示列表ch_mult的索引, mult表示ch_mult[i]
-            out_ch = ch * mult
+            out_ch = base_channels * mult
             for _ in range(num_res_blocks):
                 self.downblocks.append(ResBlock(
                     in_channels=now_ch, out_channels=out_ch,
-                    drop_prob=dropout, attn=(i in attn)))
+                    drop_prob=drop_prob, attn=(i in attn)))
                 now_ch = out_ch
                 chs.append(now_ch)
             if i != len(ch_mult) - 1:
@@ -203,8 +196,8 @@ class UNet(nn.Module):
         # 实例化U-Net编码器和解码器的过渡层，由两个残差块组成
         # 这里我不明白为什么第一个残差块加attention, 第二个不加……问就是``工程科学``
         self.middleblocks = nn.ModuleList([
-            ResBlock(now_ch, now_ch, dropout, attn=True),
-            ResBlock(now_ch, now_ch, dropout, attn=False),
+            ResBlock(now_ch, now_ch, drop_prob, attn=True),
+            ResBlock(now_ch, now_ch, drop_prob, attn=False),
         ])
 
         # 实例化U-Net的解码器部分, 与编码器几乎对称
@@ -212,11 +205,11 @@ class UNet(nn.Module):
         # 原因是第一个残差块要用来融合当前特征图与跳转连接过来的特征图，第二、三个才是和编码器对称用来抽特征
         self.upblocks = nn.ModuleList()
         for i, mult in reversed(list(enumerate(ch_mult))):
-            out_ch = ch * mult
+            out_ch = base_channels * mult
             for _ in range(num_res_blocks + 1):
                 self.upblocks.append(ResBlock(
                     in_channels=chs.pop() + now_ch, out_channels=out_ch,
-                    drop_prob=dropout, attn=(i in attn)))
+                    drop_prob=drop_prob, attn=(i in attn)))
                 now_ch = out_ch
             if i != 0:
                 self.upblocks.append(UpSample(now_ch))
@@ -226,7 +219,7 @@ class UNet(nn.Module):
         self.tail = nn.Sequential(
             nn.GroupNorm(32, now_ch),
             Swish(),
-            nn.Conv2d(now_ch, inout_ch, 3, stride=1, padding=1)
+            nn.Conv2d(now_ch, out_channels, 3, stride=1, padding=1)
         )
         # 注意这里只初始化头部和尾部模块，因为其他模块在实例化的时候已经初始化过了
         self.initialize()

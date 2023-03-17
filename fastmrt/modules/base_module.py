@@ -21,6 +21,7 @@ import numpy as np
 from typing import Any, List
 import matplotlib
 import wandb
+import time
 
 matplotlib.use('agg')
 
@@ -73,7 +74,10 @@ class BaseModule(pl.LightningModule):
             self._log_medias(val_logs, f"val_medias")
 
     def on_train_end(self) -> None:
-        torch.save(self.model.state_dict(), os.path.join(self.logger.save_dir, f"model_epoch_{self.current_epoch}.pth"))
+        t = time.localtime()
+        ts = f"{t.tm_year}{t.tm_mon:02d}{t.tm_mday:02d}_{t.tm_hour:02d}{t.tm_sec:02d}{t.tm_yday:02d}"
+        torch.save(self.model.state_dict(), os.path.join(self.logger.save_dir, self.logger.name,
+                                                         f"model_epoch_{self.current_epoch}_t{ts}.pth"))
 
     def _log_image_metrics(self, logs: Sequence[Dict], stage: str = "val"):
         # initialize scales
