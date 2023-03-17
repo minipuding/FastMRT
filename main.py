@@ -1,3 +1,4 @@
+from pyparsing import col
 import torch
 torch.multiprocessing.set_sharing_strategy('file_system')
 import torch.nn.functional as F
@@ -220,146 +221,155 @@ def run_runet(args):
     trainer.fit(unet_module, datamodule=data_module)
 
 def run_cunet(args):
+    gpus_num = len(args.gpus)
 
     # Obtain Mask Function
-        if args.sampling_mode == "RANDOM":
-            mask_func = RandomMaskFunc(center_fraction=args.center_fraction,
-                                       acceleration=args.acceleration)
-        elif args.sampling_mode == "EQUISPACED":
-            mask_func = EquiSpacedMaskFunc(center_fraction=args.center_fraction,
-                                           acceleration=args.acceleration)
-        # Obtain PRF Function
-        prf_func = PrfFunc(prf_header=PrfHeader(
-            B0=args.b0,
-            gamma=args.gamma,
-            alpha=args.alpha,
-            TE=args.te,
-        ))
+    if args.sampling_mode == "RANDOM":
+        mask_func = RandomMaskFunc(center_fraction=args.center_fraction,
+                                    acceleration=args.acceleration)
+    elif args.sampling_mode == "EQUISPACED":
+        mask_func = EquiSpacedMaskFunc(center_fraction=args.center_fraction,
+                                        acceleration=args.acceleration)
+    # Obtain PRF Function
+    prf_func = PrfFunc(prf_header=PrfHeader(
+        B0=args.b0,
+        gamma=args.gamma,
+        alpha=args.alpha,
+        TE=args.te,
+    ))
 
-        # Obtain Transforms
-        if args.stage == 'train' or args.stage == 'fine-tune':
-            project_name = "CUNET"
-            dataset_type = "2D"
-            root = args.data_dir
-            train_transform = UNetDataTransform(mask_func=mask_func,
-                                                prf_func=prf_func,
-                                                data_format=args.data_format,
-                                                use_random_seed=True,
-                                                resize_size=args.resize_size,
-                                                resize_mode=args.resize_mode,
-                                                fftshift_dim=-2)
-            val_transform = UNetDataTransform(mask_func=mask_func,
-                                              prf_func=prf_func,
-                                              data_format=args.data_format,
-                                              use_random_seed=False,
-                                              resize_size=args.resize_size,
-                                              resize_mode=args.resize_mode,
-                                              fftshift_dim=-2)
-        elif args.stage == 'pre-train':
-            project_name = "PRETRAIN_CUNET"
-            dataset_type = "PT"
-            root = args.pt_data_dir
-            train_transform = FastmrtPretrainTransform(mask_func=mask_func,
-                                                       prf_func=prf_func,
-                                                       data_format=args.data_format,
-                                                       use_random_seed=True,
-                                                       resize_size=args.resize_size,
-                                                       resize_mode=args.resize_mode,
-                                                       fftshift_dim=(-2, -1),
-                                                       simufocus_type=args.sf_type,
-                                                       net=args.net,
-                                                       frame_num=args.sf_frame_num,
-                                                       cooling_time_rate=args.sf_cooling_time_rate,
-                                                       center_crop_size=args.sf_center_crop_size,
-                                                       random_crop_size=args.sf_random_crop_size,
-                                                       max_delta_temp=args.sf_max_delta_temp,
-                                                       )
-            val_transform = FastmrtPretrainTransform(mask_func=mask_func,
-                                                     prf_func=prf_func,
-                                                     data_format=args.data_format,
-                                                     use_random_seed=False,
-                                                     resize_size=args.resize_size,
-                                                     resize_mode=args.resize_mode,
-                                                     fftshift_dim=(-2, -1),
-                                                     simufocus_type=args.sf_type,
-                                                     net=args.net,
-                                                     frame_num=args.sf_frame_num,
-                                                     cooling_time_rate=args.sf_cooling_time_rate,
-                                                     center_crop_size=args.sf_center_crop_size,
-                                                     random_crop_size=args.sf_random_crop_size,
-                                                     max_delta_temp=args.sf_max_delta_temp,
-                                                     )
+    # Obtain Transforms
+    if args.stage == 'train' or args.stage == 'fine-tune':
+        project_name = "CUNET"
+        dataset_type = "2D"
+        root = args.data_dir
+        train_transform = UNetDataTransform(mask_func=mask_func,
+                                            prf_func=prf_func,
+                                            data_format=args.data_format,
+                                            use_random_seed=True,
+                                            resize_size=args.resize_size,
+                                            resize_mode=args.resize_mode,
+                                            fftshift_dim=-2)
+        val_transform = UNetDataTransform(mask_func=mask_func,
+                                            prf_func=prf_func,
+                                            data_format=args.data_format,
+                                            use_random_seed=False,
+                                            resize_size=args.resize_size,
+                                            resize_mode=args.resize_mode,
+                                            fftshift_dim=-2)
+    elif args.stage == 'pre-train':
+        project_name = "PRETRAIN_CUNET"
+        dataset_type = "PT"
+        root = args.pt_data_dir
+        train_transform = FastmrtPretrainTransform(mask_func=mask_func,
+                                                    prf_func=prf_func,
+                                                    data_format=args.data_format,
+                                                    use_random_seed=True,
+                                                    resize_size=args.resize_size,
+                                                    resize_mode=args.resize_mode,
+                                                    fftshift_dim=(-2, -1),
+                                                    simufocus_type=args.sf_type,
+                                                    net=args.net,
+                                                    frame_num=args.sf_frame_num,
+                                                    cooling_time_rate=args.sf_cooling_time_rate,
+                                                    center_crop_size=args.sf_center_crop_size,
+                                                    random_crop_size=args.sf_random_crop_size,
+                                                    max_delta_temp=args.sf_max_delta_temp,
+                                                    )
+        val_transform = FastmrtPretrainTransform(mask_func=mask_func,
+                                                    prf_func=prf_func,
+                                                    data_format=args.data_format,
+                                                    use_random_seed=False,
+                                                    resize_size=args.resize_size,
+                                                    resize_mode=args.resize_mode,
+                                                    fftshift_dim=(-2, -1),
+                                                    simufocus_type=args.sf_type,
+                                                    net=args.net,
+                                                    frame_num=args.sf_frame_num,
+                                                    cooling_time_rate=args.sf_cooling_time_rate,
+                                                    center_crop_size=args.sf_center_crop_size,
+                                                    random_crop_size=args.sf_random_crop_size,
+                                                    max_delta_temp=args.sf_max_delta_temp,
+                                                    )
+    
+    # define augs
+    collate_fn = AugsCollateFunction(transforms=train_transform,
+                                     ap_shuffle=args.ap_shuffle,
+                                     union=args.union,
+                                     objs=args.objs,
+                                     ap_logic=args.ap_logic,
+                                     augs_list=args.augs_list,
+                                     compose_num=args.compose_num
+                                     )
 
-        # Create Data Module
-        data_module = FastmrtDataModule(root=root,
-                                        train_transform=train_transform,
-                                        val_transform=val_transform,
-                                        test_transform=val_transform,
-                                        batch_size=args.batch_size,
-                                        dataset_type=dataset_type,
-                                        generator=args.generator,
-                                        work_init_fn=args.work_init_fn)
+    # Create Data Module
+    data_module = FastmrtDataModule(root=root,
+                                    train_transform=train_transform,
+                                    val_transform=val_transform,
+                                    test_transform=val_transform,
+                                    batch_size=args.batch_size,
+                                    dataset_type=dataset_type,
+                                    collate_fn=collate_fn,
+                                    generator=args.generator,
+                                    work_init_fn=args.work_init_fn)
 
-        # Create RUnet Module
-        unet_module = CUNetModule(in_channels=args.in_channels,
-                                  out_channels=args.out_channels,
-                                  base_channels=args.base_channels,
-                                  level_num=args.level_num,
-                                  drop_prob=args.drop_prob,
-                                  leakyrelu_slope=args.leakyrelu_slope,
-                                  last_layer_with_act=args.last_layer_with_act,
-                                  lr=args.lr,
-                                  lr_step_size=args.lr_step_size,
-                                  lr_gamma=args.lr_gamma,
-                                  weight_decay=args.weight_decay,
-                                  tmap_prf_func=prf_func,
-                                  tmap_patch_rate=args.tmap_patch_rate,
-                                  tmap_max_temp_thresh=args.tmap_max_temp_thresh,
-                                  tmap_ablation_thresh=args.tmap_ablation_thresh,
-                                  log_images_frame_idx=args.log_images_frame_idx,
-                                  log_images_freq=args.log_images_freq)
+    # Create RUnet Module
+    unet_module = CUNetModule(in_channels=args.in_channels,
+                                out_channels=args.out_channels,
+                                base_channels=args.base_channels,
+                                level_num=args.level_num,
+                                drop_prob=args.drop_prob,
+                                leakyrelu_slope=args.leakyrelu_slope,
+                                last_layer_with_act=args.last_layer_with_act,
+                                lr=args.lr,
+                                lr_step_size=args.lr_step_size,
+                                lr_gamma=args.lr_gamma,
+                                weight_decay=args.weight_decay,
+                                tmap_prf_func=prf_func,
+                                tmap_patch_rate=args.tmap_patch_rate,
+                                tmap_max_temp_thresh=args.tmap_max_temp_thresh,
+                                tmap_ablation_thresh=args.tmap_ablation_thresh,
+                                log_images_frame_idx=args.log_images_frame_idx,
+                                log_images_freq=args.log_images_freq)
 
-        # Judge whether the stage is ``fine-tune``
-        if args.stage == "fine-tune":
-            unet_module.load_state_dict(torch.load(args.model_dir)["state_dict"])
-            # unet_module.model.down_convs.requires_grad_(False)  # freeze encoder
+    # Judge whether the stage is ``fine-tune``
+    if args.stage == "fine-tune":
+        unet_module.load_state_dict(torch.load(args.model_dir)["state_dict"])
+        # unet_module.model.down_convs.requires_grad_(False)  # freeze encoder
 
-        # Create Logger & Add Hparams
-        logger = loggers.WandbLogger(save_dir=args.log_dir, name=args.log_name, project=project_name)
-        hparams = {
-            "net": args.net,
-            "batch_size": args.batch_size,
-            "sampling_mode": args.sampling_mode,
-            "acceleration": args.acceleration,
-            "center_fraction": args.center_fraction,
-            "resize_size": args.resize_size,
-            "resize_mode": args.resize_mode,
+    # Create Logger & Add Hparams
+    logger = loggers.WandbLogger(save_dir=args.log_dir, name=args.log_name, project=project_name)
+    hparams = {
+        "net": args.net,
+        "batch_size": args.batch_size,
+        "sampling_mode": args.sampling_mode,
+        "acceleration": args.acceleration,
+        "center_fraction": args.center_fraction,
 
-            "base_channels": args.base_channels,
-            "level_num": args.level_num,
-            "drop_prob": args.drop_prob,
-            "leakyrelu_slope": args.leakyrelu_slope,
-            "last_layer_with_act": args.last_layer_with_act,
-            "lr": args.lr,
-            "lr_step_size": args.lr_step_size,
-            "lr_gamma": args.lr_gamma,
-            "weight_decay": args.weight_decay,
-            "max_epochs": args.max_epochs,
-        }
-        logger.log_hyperparams(hparams)
+        "base_channels": args.base_channels,
+        "level_num": args.level_num,
+        "drop_prob": args.drop_prob,
+        "leakyrelu_slope": args.leakyrelu_slope,
+        "last_layer_with_act": args.last_layer_with_act,
+        "lr": args.lr,
+        "lr_step_size": args.lr_step_size,
+        "lr_gamma": args.lr_gamma,
+        "weight_decay": args.weight_decay,
+        "max_epochs": args.max_epochs,
+    }
+    logger.log_hyperparams(hparams)
 
-        # Create Traner
-        trainer = pl.Trainer(accelerator='gpu',
-                             devices="auto",
-                             # strategy='ddp',
-                             enable_progress_bar=False,
-                             max_epochs=args.max_epochs,
-                             logger=logger,
-                             gradient_clip_algorithm="value",
-                             gradient_clip_val=0.5)
+    # Create Traner
+    strategy = 'ddp' if gpus_num > 1 else None
+    trainer = pl.Trainer(accelerator='gpu',
+                            devices="auto",
+                            strategy=strategy,
+                            enable_progress_bar=False,
+                            max_epochs=args.max_epochs,
+                            logger=logger)
 
-        # Start Training
-        trainer.fit(unet_module, datamodule=data_module)
+    # Start Training
+    trainer.fit(unet_module, datamodule=data_module)
 
 def run_casnet(args):
     # Obtain Mask Function

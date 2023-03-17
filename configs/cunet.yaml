@@ -7,8 +7,6 @@ DIRECT:
     SAMPLING_MODE: 'EQUISPACED'     # Variable Param 02
     ACCELERATION: 4             # Variable Param 03
     CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
-    RESIZE_SIZE: [224, 224]     # Variable Param 05 recommend 256
-    RESIZE_MODE: 'on_kspace'    # Variable Param 06 recommend 'on_kspace'
   MODEL:
     IN_CHANNELS: 1              # Fixed Param
     OUT_CHANNELS: 1             # Fixed Param
