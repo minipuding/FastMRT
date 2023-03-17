@@ -316,7 +316,7 @@ def run_resunet(args):
 
     # Judge whether the stage is ``fine-tune``
     if args.stage == "fine-tune":
-        unet_module.load_state_dict(torch.load(args.model_dir)["state_dict"])
+        resunet_module.load_state_dict(torch.load(args.model_dir)["state_dict"])
         # unet_module.model.down_convs.modules()
         # unet_module.model.down_convs.requires_grad_(False)  # freeze encoder
 
