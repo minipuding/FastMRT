@@ -123,4 +123,3 @@ class TransposeConvBlock(nn.Module):
 if __name__ == "__main__":
     net = Unet(2, 2, 24)
     input_data = torch.randn(8, 2, 256, 256)
-    summary(net, input_data, device='cpu', depth=5)

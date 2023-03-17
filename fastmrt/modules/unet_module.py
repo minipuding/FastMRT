@@ -1,11 +1,16 @@
+import random
+
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 from fastmrt.models.runet import Unet
+from fastmrt.models.resunet import UNet as ResUnet
 from fastmrt.modules.base_module import BaseModule
 from fastmrt.utils.normalize import denormalize
 from fastmrt.data.prf import PrfFunc
 from fastmrt.utils.trans import real_tensor_to_complex_tensor as rt2ct
+from fastmrt.utils.trans import complex_tensor_to_real_tensor as ct2rt
+from typing import Sequence, Dict
 
 
 class UNetModule(BaseModule):
@@ -54,12 +59,18 @@ class UNetModule(BaseModule):
                           leakyrelu_slope=self.leakyrelu_slope,
                           last_layer_with_act=self.last_layer_with_act,
                           )
+        # self.model = ResUnet(inout_ch=2, ch=128, ch_mult=[1, 2, 2, 2], attn=[1], num_res_blocks=2, dropout=0.1)
 
     def training_step(self, batch, batch_idx):
-        output = self.model(batch.input)
-        train_loss = F.l1_loss(output, batch.label)
+        train_loss = self._normal_training(batch)
 
         return {"loss": train_loss}
+
+    def training_epoch_end(self, train_logs: Sequence[Dict]) -> None:
+        train_loss = torch.tensor(0, dtype=torch.float32, device='cuda')
+        for log in train_logs:
+            train_loss += log["loss"]
+        self.log("loss", train_loss, on_epoch=True, on_step=False)
 
     def validation_step(self, batch, batch_idx):
         output = self.model(batch.input)
@@ -112,6 +123,13 @@ class UNetModule(BaseModule):
         #                                             gamma=self.lr_gamma)
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,
-                                                               T_max=300,
+                                                               T_max=200,
                                                                last_epoch=-1)
         return [optimizer], [scheduler]
+
+    def _normal_training(self, batch):
+        output = self.model(batch.input)
+        train_loss = F.l1_loss(output, batch.label)
+        return train_loss
+
+

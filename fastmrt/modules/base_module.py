@@ -5,10 +5,13 @@ base_module主要做两件事情
 2. 重写training_step_end()、valid_step_end()、test_step_end()
     用于在分布式训练中收集所有GPU计算结果汇总。
 """
-
+import os.path
 
 import pytorch_lightning as pl
 from typing import Dict, Sequence
+
+from torch import nn
+
 from fastmrt.utils.metrics import FastmrtMetrics
 from fastmrt.utils.rss import rss_tensor
 from fastmrt.utils.trans import real_tensor_to_complex_tensor as rt2ct
@@ -18,7 +21,6 @@ import numpy as np
 from typing import Any, List
 import matplotlib
 import wandb
-import warnings
 
 matplotlib.use('agg')
 
@@ -43,6 +45,7 @@ class BaseModule(pl.LightningModule):
         self.tmap_ablation_thresh = tmap_ablation_thresh
         self.log_images_frame_idx = log_images_frame_idx
         self.log_images_freq = log_images_freq
+        self.model: nn.Module
 
     def training_epoch_end(self, train_logs: Sequence[Dict]) -> None:
         train_loss = torch.tensor(0, dtype=torch.float32, device='cuda')
@@ -69,17 +72,8 @@ class BaseModule(pl.LightningModule):
         if (self.current_epoch + 1) % self.log_images_freq == 0:
             self._log_medias(val_logs, f"val_medias")
 
-    def test_epoch_end(self, test_logs) -> None:
-        pass
-
-    def training_step_end(self, train_log) -> Dict:
-        pass
-
-    def validation_step_end(self, val_log) -> Dict:
-        pass
-
-    def test_step_end(self, test_log) -> Dict:
-        pass
+    def on_train_end(self) -> None:
+        torch.save(self.model.state_dict(), os.path.join(self.logger.save_dir, f"model_epoch_{self.current_epoch}.pth"))
 
     def _log_image_metrics(self, logs: Sequence[Dict], stage: str = "val"):
         # initialize scales

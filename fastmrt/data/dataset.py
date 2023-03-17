@@ -17,7 +17,6 @@ from pathlib import Path
 import os
 import h5py
 import fastmrt.utils.trans as tool
-from fastmrt.utils.fftc import ifft2c_numpy
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -99,7 +98,10 @@ class SliceDataset(Dataset):
                                              "coil_idx": coil_idx,}]
 
     def __getitem__(self, idx : int):
-        return self.transform(self.slice_data[idx])
+        if self.transform is None:
+            return self.slice_data[idx]
+        else:
+            return self.transform(self.slice_data[idx])
 
     def __len__(self):
         return len(self.slice_data)
