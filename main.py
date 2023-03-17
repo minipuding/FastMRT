@@ -10,6 +10,7 @@ import yaml
 from cli import FastmrtCLI
 from typing import NamedTuple
 import copy
+import thop
 
 from fastmrt.data.dataset import SliceDataset
 from fastmrt.data.mask import RandomMaskFunc, EquiSpacedMaskFunc, apply_mask
@@ -25,10 +26,13 @@ from fastmrt.data.augs import AugsCollateFunction
 from fastmrt.modules.data_module import FastmrtDataModule
 from fastmrt.modules.unet_module import UNetModule
 from fastmrt.modules.cunet_module import CUNetModule
+from fastmrt.modules.resunet_module import ResUNetModule
+from fastmrt.modules.swtnet_module import SwtNetModule
 from fastmrt.modules.casnet_module import CasNetModule
 from fastmrt.modules.rftnet_module import RFTNetModule
 from fastmrt.modules.kdnet_module import KDNetModule
 from fastmrt.models.runet import Unet
+from fastmrt.models.resunet import UNet as ResUNet
 from fastmrt.pretrain.transforms import FastmrtPretrainTransform
 
 # build args
@@ -64,6 +68,14 @@ def build_args():
         with open(parser.parse_args().cunet_config_dir) as fconfig:
             cunet_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
         parser = FastmrtCLI.cunet_cli(parser, cunet_cfg)
+    elif parser.parse_args().net == 'resunet':
+        with open(parser.parse_args().resunet_config_dir) as fconfig:
+            resunet_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
+        parser = FastmrtCLI.resunet_cli(parser, resunet_cfg)
+    elif parser.parse_args().net == 'swtnet':
+        with open(parser.parse_args().swtnet_config_dir) as fconfig:
+            swtnet_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
+        parser = FastmrtCLI.swtnet_cli(parser, swtnet_cfg)
     elif parser.parse_args().net == 'casnet':
         with open(parser.parse_args().casnet_config_dir) as fconfig:
             casnet_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
@@ -105,15 +117,11 @@ def run_runet(args):
                                         prf_func=prf_func,
                                         data_format=args.data_format,
                                         use_random_seed=True,
-                                        resize_size=args.resize_size,
-                                        resize_mode=args.resize_mode,
                                         fftshift_dim=(-2, -1))
     val_transform = UNetDataTransform(mask_func=mask_func,
                                       prf_func=prf_func,
                                       data_format=args.data_format,
                                       use_random_seed=False,
-                                      resize_size=args.resize_size,
-                                      resize_mode=args.resize_mode,
                                       fftshift_dim=(-2, -1))
 
     # define augs
@@ -182,13 +190,16 @@ def run_runet(args):
 
     # Create Logger & Add Hparams
     logger = loggers.WandbLogger(save_dir=args.log_dir, name=args.log_name, project=project_name)
+    flops, params = thop.profile(unet_module.model, (torch.randn(1, 2, 96, 96), ))
     hparams = {
         "net": args.net,
+        "dataset": args.data_dir,
         "batch_size": args.batch_size,
         "sampling_mode": args.sampling_mode,
         "acceleration": args.acceleration,
         "center_fraction": args.center_fraction,
-        "params": "%.2fM" % (sum([param.nelement() for param in unet_module.model.parameters()]) / 1e6),
+        "FLOPs": "%.2fG" % (flops * 1e-9),
+        "params": "%.2fM" % (params * 1e-6),
         "base_channels": args.base_channels,
         "level_num": args.level_num,
         "drop_prob": args.drop_prob,
@@ -230,6 +241,7 @@ def run_cunet(args):
     elif args.sampling_mode == "EQUISPACED":
         mask_func = EquiSpacedMaskFunc(center_fraction=args.center_fraction,
                                         acceleration=args.acceleration)
+    
     # Obtain PRF Function
     prf_func = PrfFunc(prf_header=PrfHeader(
         B0=args.b0,
@@ -238,7 +250,6 @@ def run_cunet(args):
         TE=args.te,
     ))
 
-    # Obtain Transforms
     if args.stage == 'train' or args.stage == 'fine-tune':
         project_name = "CUNET"
         dataset_type = "2D"
@@ -277,22 +288,20 @@ def run_cunet(args):
                                                     max_delta_temp=args.sf_max_delta_temp,
                                                     )
         val_transform = FastmrtPretrainTransform(mask_func=mask_func,
-                                                    prf_func=prf_func,
-                                                    data_format=args.data_format,
-                                                    use_random_seed=False,
-                                                    resize_size=args.resize_size,
-                                                    resize_mode=args.resize_mode,
-                                                    fftshift_dim=(-2, -1),
-                                                    simufocus_type=args.sf_type,
-                                                    net=args.net,
-                                                    frame_num=args.sf_frame_num,
-                                                    cooling_time_rate=args.sf_cooling_time_rate,
-                                                    center_crop_size=args.sf_center_crop_size,
-                                                    random_crop_size=args.sf_random_crop_size,
-                                                    max_delta_temp=args.sf_max_delta_temp,
-                                                    )
-    
-    # define augs
+                                                 prf_func=prf_func,
+                                                 data_format=args.data_format,
+                                                 use_random_seed=False,
+                                                 resize_size=args.resize_size,
+                                                 resize_mode=args.resize_mode,
+                                                 fftshift_dim=(-2, -1),
+                                                 simufocus_type=args.sf_type,
+                                                 net=args.net,
+                                                 frame_num=args.sf_frame_num,
+                                                 cooling_time_rate=args.sf_cooling_time_rate,
+                                                 center_crop_size=args.sf_center_crop_size,
+                                                 random_crop_size=args.sf_random_crop_size,
+                                                 max_delta_temp=args.sf_max_delta_temp,
+                                                 )
     collate_fn = AugsCollateFunction(transforms=train_transform,
                                      ap_shuffle=args.ap_shuffle,
                                      union=args.union,
@@ -303,6 +312,7 @@ def run_cunet(args):
                                      )
 
     # Create Data Module
+    # args.batch_size *= gpus_num
     data_module = FastmrtDataModule(root=root,
                                     train_transform=train_transform,
                                     val_transform=val_transform,
@@ -312,8 +322,8 @@ def run_cunet(args):
                                     collate_fn=collate_fn,
                                     generator=args.generator,
                                     work_init_fn=args.work_init_fn)
-
-    # Create RUnet Module
+    
+    # Create CUnet Module
     unet_module = CUNetModule(in_channels=args.in_channels,
                                 out_channels=args.out_channels,
                                 base_channels=args.base_channels,
@@ -335,17 +345,19 @@ def run_cunet(args):
     # Judge whether the stage is ``fine-tune``
     if args.stage == "fine-tune":
         unet_module.load_state_dict(torch.load(args.model_dir)["state_dict"])
-        # unet_module.model.down_convs.requires_grad_(False)  # freeze encoder
-
+    
     # Create Logger & Add Hparams
     logger = loggers.WandbLogger(save_dir=args.log_dir, name=args.log_name, project=project_name)
+    flops, params = thop.profile(unet_module.model, (torch.randn(1, 2, 96, 96), ))
     hparams = {
         "net": args.net,
+        "dataset": args.data_dir,
         "batch_size": args.batch_size,
         "sampling_mode": args.sampling_mode,
         "acceleration": args.acceleration,
         "center_fraction": args.center_fraction,
-
+        "FLOPs": "%.2fG" % (flops * 1e-9),
+        "params": "%.2fM" % (params * 1e-6),
         "base_channels": args.base_channels,
         "level_num": args.level_num,
         "drop_prob": args.drop_prob,
@@ -356,20 +368,312 @@ def run_cunet(args):
         "lr_gamma": args.lr_gamma,
         "weight_decay": args.weight_decay,
         "max_epochs": args.max_epochs,
+        "augs-ap_shuffle": args.ap_shuffle,
+        "augs-union": args.union,
+        "augs-objs": args.objs,
+        "augs-ap_logic": args.ap_logic,
+        "augs-augs_list": args.augs_list,
+        "augs-compose_num": args.compose_num,
     }
     logger.log_hyperparams(hparams)
 
     # Create Traner
     strategy = 'ddp' if gpus_num > 1 else None
+    
     trainer = pl.Trainer(accelerator='gpu',
-                            devices="auto",
-                            strategy=strategy,
-                            enable_progress_bar=False,
-                            max_epochs=args.max_epochs,
-                            logger=logger)
+                        devices="auto",
+                        strategy=strategy,
+                        enable_progress_bar=False,
+                        max_epochs=args.max_epochs,
+                        logger=logger)
 
     # Start Training
     trainer.fit(unet_module, datamodule=data_module)
+    
+    
+def run_resunet(args):
+
+    gpus_num = len(args.gpus)
+    # Obtain Mask Function
+    if args.sampling_mode == "RANDOM":
+        mask_func = RandomMaskFunc(center_fraction=args.center_fraction,
+                                   acceleration=args.acceleration)
+    elif args.sampling_mode == "EQUISPACED":
+        mask_func = EquiSpacedMaskFunc(center_fraction=args.center_fraction,
+                                       acceleration=args.acceleration)
+    # Obtain PRF Function
+    prf_func = PrfFunc(prf_header=PrfHeader(
+        B0=args.b0,
+        gamma=args.gamma,
+        alpha=args.alpha,
+        TE=args.te,
+    ))
+ 
+    project_name = "RESUNET"
+    dataset_type = "2D"
+    root = args.data_dir
+    train_transform = UNetDataTransform(mask_func=mask_func,
+                                        prf_func=prf_func,
+                                        data_format=args.data_format,
+                                        use_random_seed=True,
+                                        fftshift_dim=(-2, -1))
+    val_transform = UNetDataTransform(mask_func=mask_func,
+                                      prf_func=prf_func,
+                                      data_format=args.data_format,
+                                      use_random_seed=False,
+                                      fftshift_dim=(-2, -1))
+
+    # define augs
+    collate_fn = AugsCollateFunction(transforms=train_transform,
+                                     ap_shuffle=args.ap_shuffle,
+                                     union=args.union,
+                                     objs=args.objs,
+                                     ap_logic=args.ap_logic,
+                                     augs_list=args.augs_list,
+                                     compose_num=args.compose_num
+                                     )
+    if args.stage == 'pre-train':
+        project_name = "PRETRAIN"
+        dataset_type = "PT"
+        root = args.pt_data_dir
+        train_transform = ComposeTransform([
+            FastmrtPretrainTransform(simufocus_type=args.sf_type,
+                                     use_random_seed=True,
+                                     frame_num=args.sf_frame_num,
+                                     cooling_time_rate=args.sf_cooling_time_rate,
+                                     max_delta_temp=args.sf_max_delta_temp,
+                                     ), train_transform])
+        val_transform = ComposeTransform([
+            FastmrtPretrainTransform(simufocus_type=args.sf_type,
+                                     use_random_seed=True,
+                                     frame_num=args.sf_frame_num,
+                                     cooling_time_rate=args.sf_cooling_time_rate,
+                                     max_delta_temp=args.sf_max_delta_temp,
+                                     ), val_transform])
+
+    # Create Data Module
+    # args.batch_size *= gpus_num
+    data_module = FastmrtDataModule(root=root,
+                                    train_transform=train_transform,
+                                    val_transform=val_transform,
+                                    test_transform=val_transform,
+                                    batch_size=args.batch_size,
+                                    dataset_type=dataset_type,
+                                    collate_fn=collate_fn,
+                                    generator=args.generator,
+                                    work_init_fn=args.work_init_fn)
+
+    # Create RUnet Module
+    # args.lr *= gpus_num
+    resunet_module = ResUNetModule(in_channels=args.in_channels,
+                                   out_channels=args.out_channels,
+                                   base_channels=args.base_channels,
+                                   ch_mult=args.ch_mult,
+                                   attn=args.attn,
+                                   num_res_blocks=args.num_res_block,
+                                   drop_prob=args.drop_prob,
+                                   lr=args.lr,
+                                   weight_decay=args.weight_decay,
+                                   tmap_prf_func=prf_func,
+                                   tmap_patch_rate=args.tmap_patch_rate,
+                                   tmap_max_temp_thresh=args.tmap_max_temp_thresh,
+                                   tmap_ablation_thresh=args.tmap_ablation_thresh,
+                                   log_images_frame_idx=args.log_images_frame_idx,
+                                   log_images_freq=args.log_images_freq)
+
+    # Judge whether the stage is ``fine-tune``
+    if args.stage == "fine-tune":
+        resunet_module.load_state_dict(torch.load(args.model_dir)["state_dict"])
+        # unet_module.model.down_convs.modules()
+        # unet_module.model.down_convs.requires_grad_(False)  # freeze encoder
+
+    # Create Logger & Add Hparams
+    logger = loggers.WandbLogger(save_dir=args.log_dir, name=args.log_name, project=project_name)
+    flops, params = thop.profile(resunet_module.model, (torch.randn(1, 2, 96, 96), ))
+    hparams = {
+        "net": args.net,
+        "dataset": args.data_dir,
+        "batch_size": args.batch_size,
+        "sampling_mode": args.sampling_mode,
+        "acceleration": args.acceleration,
+        "center_fraction": args.center_fraction,
+        "FLOPs": "%.2fG" % (flops * 1e-9),
+        "params": "%.2fM" % (params * 1e-6),
+        "base_channels": args.base_channels,
+        "ch_mult": args.ch_mult,
+        "attn": args.attn,
+        "num_res_block": args.num_res_block,
+        "drop_prob": args.drop_prob,
+        "lr": args.lr,
+        "weight_decay": args.weight_decay,
+        "max_epochs": args.max_epochs,
+        "augs-ap_shuffle": args.ap_shuffle,
+        "augs-union": args.union,
+        "augs-objs": args.objs,
+        "augs-ap_logic": args.ap_logic,
+        "augs-augs_list": args.augs_list,
+        "augs-compose_num": args.compose_num,
+    }
+    logger.log_hyperparams(hparams)
+
+    # Create Traner
+    strategy = 'ddp' if gpus_num > 1 else None
+
+    trainer = pl.Trainer(accelerator='gpu',
+                         devices="auto",
+                         strategy=strategy,
+                         enable_progress_bar=False,
+                         max_epochs=args.max_epochs,
+                         logger=logger,)
+
+    # Start Training
+    trainer.fit(resunet_module, datamodule=data_module)
+
+def run_swtnet(args):
+
+    gpus_num = len(args.gpus)
+    # Obtain Mask Function
+    if args.sampling_mode == "RANDOM":
+        mask_func = RandomMaskFunc(center_fraction=args.center_fraction,
+                                   acceleration=args.acceleration)
+    elif args.sampling_mode == "EQUISPACED":
+        mask_func = EquiSpacedMaskFunc(center_fraction=args.center_fraction,
+                                       acceleration=args.acceleration)
+    # Obtain PRF Function
+    prf_func = PrfFunc(prf_header=PrfHeader(
+        B0=args.b0,
+        gamma=args.gamma,
+        alpha=args.alpha,
+        TE=args.te,
+    ))
+
+    # Obtain Transforms
+    project_name = "SWTNET"
+    dataset_type = "2D"
+    root = args.data_dir
+    train_transform = UNetDataTransform(mask_func=mask_func,
+                                        prf_func=prf_func,
+                                        data_format=args.data_format,
+                                        use_random_seed=True,
+                                        fftshift_dim=(-2, -1))
+    val_transform = UNetDataTransform(mask_func=mask_func,
+                                      prf_func=prf_func,
+                                      data_format=args.data_format,
+                                      use_random_seed=False,
+                                      fftshift_dim=(-2, -1))
+
+    # define augs
+    collate_fn = AugsCollateFunction(transforms=train_transform,
+                                     ap_shuffle=args.ap_shuffle,
+                                     union=args.union,
+                                     objs=args.objs,
+                                     ap_logic=args.ap_logic,
+                                     augs_list=args.augs_list,
+                                     compose_num=args.compose_num
+                                     )
+    if args.stage == 'pre-train':
+        project_name = "PRETRAIN"
+        dataset_type = "PT"
+        root = args.pt_data_dir
+        train_transform = ComposeTransform([
+            FastmrtPretrainTransform(simufocus_type=args.sf_type,
+                                     use_random_seed=True,
+                                     frame_num=args.sf_frame_num,
+                                     cooling_time_rate=args.sf_cooling_time_rate,
+                                     max_delta_temp=args.sf_max_delta_temp,
+                                     ), train_transform])
+        val_transform = ComposeTransform([
+            FastmrtPretrainTransform(simufocus_type=args.sf_type,
+                                     use_random_seed=True,
+                                     frame_num=args.sf_frame_num,
+                                     cooling_time_rate=args.sf_cooling_time_rate,
+                                     max_delta_temp=args.sf_max_delta_temp,
+                                     ), val_transform])
+
+    # Create Data Module
+    # args.batch_size *= gpus_num
+    data_module = FastmrtDataModule(root=root,
+                                    train_transform=train_transform,
+                                    val_transform=val_transform,
+                                    test_transform=val_transform,
+                                    batch_size=args.batch_size,
+                                    dataset_type=dataset_type,
+                                    collate_fn=collate_fn)
+
+    # Create RUnet Module
+    # args.lr *= gpus_num
+    swtnet_module = SwtNetModule(upscale=args.upscale,
+                                 in_channels=args.in_channels,
+                                 img_size=args.img_size,
+                                 patch_size=args.patch_size,
+                                 window_size=args.window_size,
+                                 img_range=args.img_range,
+                                 depths=args.depths,
+                                 embed_dim=args.embed_dim,
+                                 num_heads=args.num_heads,
+                                 mlp_ratio=args.mlp_ratio,
+                                 upsampler=args.upsampler,
+                                 resi_connection=args.resi_connection,
+                                 lr=args.lr,
+                                 weight_decay=args.weight_decay,
+                                 tmap_prf_func=prf_func,
+                                 tmap_patch_rate=args.tmap_patch_rate,
+                                 tmap_max_temp_thresh=args.tmap_max_temp_thresh,
+                                 tmap_ablation_thresh=args.tmap_ablation_thresh,
+                                 log_images_frame_idx=args.log_images_frame_idx,
+                                 log_images_freq=args.log_images_freq)
+
+    # Judge whether the stage is ``fine-tune``
+    if args.stage == "fine-tune":
+        swtnet_module.load_state_dict(torch.load(args.model_dir)["state_dict"])
+        # unet_module.model.down_convs.modules()
+        # unet_module.model.down_convs.requires_grad_(False)  # freeze encoder
+
+    # Create Logger & Add Hparams
+    logger = loggers.WandbLogger(save_dir=args.log_dir, name=args.log_name, project=project_name)
+    flops, params = thop.profile(swtnet_module.model, (torch.randn(1, 2, 96, 96), ))
+    hparams = {
+        "net": args.net,
+        "dataset": args.data_dir,
+        "batch_size": args.batch_size,
+        "sampling_mode": args.sampling_mode,
+        "acceleration": args.acceleration,
+        "center_fraction": args.center_fraction,
+        "FLOPs": "%.2fG" % (flops * 1e-9),
+        "params": "%.2fM" % (params * 1e-6),
+        "upscale": args.upscale,
+        "img_size": args.img_size,
+        "window_size": args.window_size,
+        "img_range": args.img_range,
+        "depths": args.depths,
+        "embed_dim": args.embed_dim,
+        "num_heads": args.num_heads,
+        "mlp_ratio": args.mlp_ratio,
+        "upsampler": args.upsampler,
+        "resi_connection": args.resi_connection,
+        "lr": args.lr,
+        "weight_decay": args.weight_decay,
+        "max_epochs": args.max_epochs,
+        "augs-ap_shuffle": args.ap_shuffle,
+        "augs-union": args.union,
+        "augs-objs": args.objs,
+        "augs-ap_logic": args.ap_logic,
+        "augs-augs_list": args.augs_list,
+        "augs-compose_num": args.compose_num,
+    }
+    logger.log_hyperparams(hparams)
+
+    # Create Traner
+    strategy = 'ddp' if gpus_num > 1 else None
+
+    trainer = pl.Trainer(gpus=args.gpus,
+                         strategy=strategy,
+                         enable_progress_bar=False,
+                         max_epochs=args.max_epochs,
+                         logger=logger)
+
+    # Start Training
+    trainer.fit(swtnet_module, datamodule=data_module)
 
 def run_casnet(args):
     # Obtain Mask Function
@@ -420,15 +724,15 @@ def run_casnet(args):
 
     # Create Logger & Add Hparams
     logger = loggers.WandbLogger(save_dir=args.log_dir, name=args.log_name, project="CASNET")
+    flops, params = thop.profile(casnet_module.model, (torch.randn(1, 2, 96, 96), ))
     hparams = {
         "net": args.net,
         "batch_size": args.batch_size,
         "sampling_mode": args.sampling_mode,
         "acceleration": args.acceleration,
         "center_fraction": args.center_fraction,
-        "resize_size": args.resize_size,
-        "resize_mode": args.resize_mode,
-
+        "FLOPs": "%.2fG" % (flops * 1e-9),
+        "params": "%.2fM" % (params * 1e-6),
         "base_channels": args.base_channels,
         "res_block_num": args.res_block_num,
         "res_conv_ksize": args.res_conv_ksize,
@@ -607,29 +911,30 @@ def run_kdnet(args):
                                     collate_fn=collate_fn)
 
     # Create teacher and student model
-    tea_net = Unet(in_channels=args.in_channels,
+    tea_net = ResUNet(in_channels=args.in_channels,
                    out_channels=args.out_channels,
-                   base_channels=args.base_channels_tea,
-                   level_num=args.level_num_tea,
-                   drop_prob=args.drop_prob_tea,
-                   leakyrelu_slope=args.leakyrelu_slope_tea,
-                   last_layer_with_act=args.last_layer_with_act_tea)
-    stu_net = Unet(in_channels=args.in_channels,
+                   base_channels=args.base_channels_tea)
+    module_state_dict = torch.load(args.model_dir)["state_dict"]
+    model_state_dict = tea_net.state_dict()
+    del_list=[]
+    for key in module_state_dict:
+        if 'total' in key:
+            del_list.append(key)
+    for key in del_list:
+        module_state_dict.pop(key, None)
+    for model_key, module_key in zip(model_state_dict, module_state_dict):
+        model_state_dict[model_key] = module_state_dict[module_key]
+    tea_net.load_state_dict(model_state_dict)
+    stu_net = ResUNet(in_channels=args.in_channels,
                    out_channels=args.out_channels,
-                   base_channels=args.base_channels_stu,
-                   level_num=args.level_num_stu,
-                   drop_prob=args.drop_prob_stu,
-                   leakyrelu_slope=args.leakyrelu_slope_stu,
-                   last_layer_with_act=args.last_layer_with_act_stu)
+                   base_channels=args.base_channels_stu)
 
     # Create RUnet Module
     kdnet_module = KDNetModule(tea_net=tea_net,
                                stu_net=stu_net,
                                use_ema=args.use_ema,
                                soft_label_weight=args.soft_label_weight,
-                               lr_tea=args.lr_tea,
                                lr_stu=args.lr_stu,
-                               weight_decay_tea=args.weight_decay_tea,
                                weight_decay_stu=args.weight_decay_stu,
                                tmap_prf_func=prf_func,
                                tmap_patch_rate=args.tmap_patch_rate,
@@ -646,6 +951,8 @@ def run_kdnet(args):
 
     # Create Logger & Add Hparams
     logger = loggers.WandbLogger(save_dir=args.log_dir, name=args.log_name, project=project_name)
+    flops_tea, params_tea = thop.profile(tea_net, (torch.randn(1, 2, 96, 96), ))
+    flops_stu, params_stu = thop.profile(stu_net, (torch.randn(1, 2, 96, 96), ))
     hparams = {
         "net_tea": tea_net._get_name(),
         "net_stu": stu_net._get_name(),
@@ -655,21 +962,19 @@ def run_kdnet(args):
         "acceleration_stu": args.acceleration_stu,
         "center_fraction_tea": args.center_fraction_tea,
         "center_fraction_stu": args.center_fraction_stu,
-        "params_tea": "%.2fM" % (sum([param.nelement() for param in tea_net.parameters()]) / 1e6),
-        "params_stu": "%.2fM" % (sum([param.nelement() for param in stu_net.parameters()]) / 1e6),
+        "FLOPs_tea": "%.2fG" % (flops_tea * 1e-9),
+        "FLOPs_stu": "%.2fG" % (flops_stu * 1e-9),
+        "params_tea": "%.2fM" % (params_tea * 1e-6),
+        "params_stu": "%.2fM" % (params_stu * 1e-6),
         "base_channels_tea": args.base_channels_tea,
         "base_channels_stu": args.base_channels_stu,
         "level_num_tea": args.level_num_tea,
         "level_num_stu": args.level_num_stu,
-        "drop_prob_tea": args.drop_prob_tea,
         "drop_prob_stu": args.drop_prob_stu,
-        "leakyrelu_slope_tea": args.leakyrelu_slope_tea,
         "leakyrelu_slope_stu": args.leakyrelu_slope_stu,
         "last_layer_with_act_tea": args.last_layer_with_act_tea,
         "last_layer_with_act_stu": args.last_layer_with_act_stu,
-        "lr_tea": args.lr_tea,
         "lr_stu": args.lr_stu,
-        "weight_decay_tea": args.weight_decay_tea,
         "weight_decay_stu": args.weight_decay_stu,
         "max_epochs": args.max_epochs,
         "soft_label_weight": args.soft_label_weight,
@@ -700,6 +1005,10 @@ def run(args):
         run_runet(args)
     elif args.net == 'c-unet':
         run_cunet(args)
+    elif args.net == 'resunet':
+        run_resunet(args)
+    elif args.net == 'swtnet':
+        run_swtnet(args)
     elif args.net == 'casnet':
         run_casnet(args)
     elif args.net == 'rftnet':

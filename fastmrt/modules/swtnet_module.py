@@ -1,31 +1,29 @@
-import random
-
-import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
-from fastmrt.models.runet import Unet
-from fastmrt.models.resunet import UNet as ResUnet
+from fastmrt.models.swtnet import SwinIR
 from fastmrt.modules.base_module import BaseModule
+from fastmrt.utils.trans import real_tensor_to_complex_tensor as rt2ct
 from fastmrt.utils.normalize import denormalize
 from fastmrt.data.prf import PrfFunc
-from fastmrt.utils.trans import real_tensor_to_complex_tensor as rt2ct
-from fastmrt.utils.trans import complex_tensor_to_real_tensor as ct2rt
 from typing import Sequence, Dict
 
 
-class UNetModule(BaseModule):
+class SwtNetModule(BaseModule):
     def __init__(
             self,
-            in_channels: int,
-            out_channels: int,
-            base_channels: int = 32,
-            level_num: int = 4,
-            drop_prob: float = 0.0,
-            leakyrelu_slope: float = 0.1,
-            last_layer_with_act: bool = False,
-            lr: float = 5e-4,
-            lr_step_size: int = 40,
-            lr_gamma: float = 0.1,
+            upscale=1,
+            in_channels=2,
+            img_size=[96, 96],
+            patch_size=1,
+            window_size=8,
+            img_range=1.0,
+            depths=[6, 6, 6, 6, 6, 6],
+            embed_dim=180,
+            num_heads=[6, 6, 6, 6, 6, 6],
+            mlp_ratio=2.0,
+            upsampler='',
+            resi_connection='1conv',
+            lr: float = 1e-3,
             weight_decay: float = 1e-4,
             tmap_prf_func: PrfFunc = None,
             tmap_patch_rate: int = 4,
@@ -34,35 +32,43 @@ class UNetModule(BaseModule):
             log_images_frame_idx: int = 5,  # recommend 4 ~ 8
             log_images_freq: int = 50,
     ):
-        super(UNetModule, self).__init__(tmap_prf_func=tmap_prf_func,
-                                         tmap_patch_rate=tmap_patch_rate,
-                                         tmap_max_temp_thresh=tmap_max_temp_thresh,
-                                         tmap_ablation_thresh=tmap_ablation_thresh,
-                                         log_images_frame_idx=log_images_frame_idx,
-                                         log_images_freq=log_images_freq)
+        super(SwtNetModule, self).__init__(tmap_prf_func=tmap_prf_func,
+                                           tmap_patch_rate=tmap_patch_rate,
+                                           tmap_max_temp_thresh=tmap_max_temp_thresh,
+                                           tmap_ablation_thresh=tmap_ablation_thresh,
+                                           log_images_frame_idx=log_images_frame_idx,
+                                           log_images_freq=log_images_freq)
         self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.base_channels = base_channels
-        self.level_num = level_num
-        self.drop_prob = drop_prob
-        self.leakyrelu_slope = leakyrelu_slope
-        self.last_layer_with_act = last_layer_with_act
+        self.upscale = upscale
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.window_size = window_size
+        self.img_range = img_range
+        self.depths = depths
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.mlp_ratio = mlp_ratio
+        self.upsampler = upsampler
+        self.resi_connection = resi_connection
         self.lr = lr
-        self.lr_step_size = lr_step_size
-        self.lr_gamma = lr_gamma
         self.weight_decay = weight_decay
-        self.model = Unet(in_channels=self.in_channels,
-                          out_channels=self.out_channels,
-                          base_channels=self.base_channels,
-                          level_num=self.level_num,
-                          drop_prob=self.drop_prob,
-                          leakyrelu_slope=self.leakyrelu_slope,
-                          last_layer_with_act=self.last_layer_with_act,
-                          )
+        self.model = SwinIR(upscale=self.upscale,
+                            in_chans=self.in_channels,
+                            img_size=self.img_size,
+                            patch_size=self.patch_size,
+                            window_size=self.window_size,
+                            img_range=self.img_range,
+                            depths=self.depths,
+                            embed_dim=self.embed_dim,
+                            num_heads=self.num_heads,
+                            mlp_ratio=self.mlp_ratio,
+                            upsampler=self.upsampler,
+                            resi_connection=self.resi_connection
+                            )
         # self.model = ResUnet(inout_ch=2, ch=128, ch_mult=[1, 2, 2, 2], attn=[1], num_res_blocks=2, dropout=0.1)
 
     def training_step(self, batch, batch_idx):
-        train_loss = self._decoupled_loss_v4(batch)
+        train_loss = self._decoupled_loss(batch)
 
         return {"loss": train_loss}
 
@@ -127,7 +133,7 @@ class UNetModule(BaseModule):
                                                                last_epoch=-1)
         return [optimizer], [scheduler]
 
-    def _l1_loss(self, batch):
+    def _normal_training(self, batch):
         output = self.model(batch.input)
         train_loss = F.l1_loss(output, batch.label)
         return train_loss
@@ -141,28 +147,8 @@ class UNetModule(BaseModule):
         amp_loss = F.l1_loss(output_complex.abs(), label_complex.abs())
 
         # phase loss
-        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * batch.phs_scale).abs().sum(0).mean()
-
-        # train_loss
-        train_loss = amp_loss + phs_loss / torch.pi
-
-        return train_loss
-
-    def _decoupled_loss_v4(self, batch):
-        """decoupled loss after de-normalize"""
-        output = self.model(batch.input)
-        mean = batch.mean.unsqueeze(1).unsqueeze(2).unsqueeze(3)
-        std = batch.std.unsqueeze(1).unsqueeze(2).unsqueeze(3)
-        output_complex = rt2ct(denormalize(output, mean, std))
-        label_complex = rt2ct(denormalize(batch.label, mean, std))
-
-        # amplitude loss
-        amp_loss = F.l1_loss(output_complex.abs(), label_complex.abs())
-
-        # phase loss
         phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * label_complex.abs()).abs().sum(0).mean()
 
-        # train_loss
-        train_loss = amp_loss + phs_loss / torch.pi
+        return amp_loss + phs_loss / torch.pi
 
-        return train_loss
+

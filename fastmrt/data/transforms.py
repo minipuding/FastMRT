@@ -10,11 +10,10 @@ from fastmrt.utils.trans import (
 )
 from fastmrt.utils.trans import real_np_to_complex_np as rn2cn
 from fastmrt.utils.trans import complex_np_to_real_np as cn2rn
-from fastmrt.utils.fftc import ifft2c_tensor
+from fastmrt.utils.fftc import ifft2c_tensor, fft2c_tensor
 from fastmrt.utils.resize import resize, resize_on_kspace, resize_on_image
 from fastmrt.utils.normalize import normalize_apply, normalize_paras
 import numpy as np
-import albumentations as A
 
 
 class Default(NamedTuple):
@@ -42,6 +41,7 @@ class UNetSample(NamedTuple):
     # For training
     input: torch.Tensor
     label: torch.Tensor
+    phs_scale: torch.Tensor
     # For temperature map
     input_ref: torch.Tensor
     label_ref: torch.Tensor
@@ -62,6 +62,7 @@ class CasNetSample(NamedTuple):
     # For training
     input: torch.Tensor
     label: torch.Tensor
+    phs_scale: torch.Tensor
     # For temperature map
     input_ref: torch.Tensor
     label_ref: torch.Tensor
@@ -84,6 +85,7 @@ class RFTNetSample(NamedTuple):
     label_phs: torch.Tensor
     label_ref: torch.Tensor
     label_img: torch.Tensor
+    phs_scale: torch.Tensor
     # For temperature map
     tmap_mask: torch.Tensor
     # For restore
@@ -127,8 +129,6 @@ class UNetDataTransform:
             prf_func: PrfFunc = None,
             data_format: str = 'CF',
             use_random_seed: bool = True,
-            resize_size: Tuple[int, ...] = (224, 224),
-            resize_mode: str = 'on_kspace',
             fftshift_dim: Union[int, Tuple[int, int]] = (-2, -1),
     ):
         """
@@ -139,8 +139,6 @@ class UNetDataTransform:
         self.prf_func = prf_func
         self.data_format = data_format
         self.use_random_seed = use_random_seed
-        self.resize_size = resize_size
-        self.resize_mode = resize_mode
         self.fftshift_dim = fftshift_dim
 
     def __call__(
@@ -153,43 +151,36 @@ class UNetDataTransform:
         kspace_torch = torch.from_numpy(data["kspace"])
         kspace_torch_ref = torch.from_numpy(data["kspace_ref"])
 
+        # apply decoupled augs
+        # temp_image = ifft2c_tensor(kspace_torch, self.fftshift_dim)
+        # if self.augs_func is not None:
+        #     augs_image, tmap_mask, phs_scale = self.augs_func(temp_image, data["tmap_mask"])
+        #     kspace_torch = fft2c_tensor(augs_image, self.fftshift_dim)
+        #     data["tmap_mask"] = tmap_mask
+        # else:
+        #     phs_scale = temp_image.abs()
+
         # apply mask
         tag = f"{data['file_name']}_f{data['frame_idx']}s{data['slice_idx']}c{'coil_idx'}"
         seed = None if self.use_random_seed is True else tuple(map(ord, tag))
         mask_kspace, mask, _ = apply_mask(kspace_torch, self.mask_func, seed=seed)
         mask_kspace_ref = kspace_torch_ref * mask
 
-        # apply inverse Fourier transform & resize
-        if self.resize_mode == 'on_image':
-            # mask kspace
-            mask_image = ifft2c_tensor(mask_kspace, self.fftshift_dim)
-            # mask_image = resize_on_image(mask_image, self.resize_size)
-            # mask kspace reference
-            mask_image_ref = ifft2c_tensor(mask_kspace_ref, self.fftshift_dim)
-            # mask_image_ref = resize_on_image(mask_image_ref, self.resize_size)
-            # full image
-            full_image = ifft2c_tensor(kspace_torch, self.fftshift_dim)
-            # full_image = resize_on_image(full_image, self.resize_size)
-            # full image reference
-            full_image_ref = ifft2c_tensor(kspace_torch_ref, self.fftshift_dim)
-            # full_image_ref = resize_on_image(full_image_ref, self.resize_size)
+        # apply inverse Fourier transform
+        # mask kspace
+        mask_image = ifft2c_tensor(mask_kspace, self.fftshift_dim)
+        # mask kspace reference
+        mask_image_ref = ifft2c_tensor(mask_kspace_ref, self.fftshift_dim)
+        # full image
+        full_image = ifft2c_tensor(kspace_torch, self.fftshift_dim)
+        # full image reference
+        full_image_ref = ifft2c_tensor(kspace_torch_ref, self.fftshift_dim)
 
-        elif self.resize_mode == 'on_kspace':
-            # mask kspace
-            # mask_kspace = resize_on_kspace(mask_kspace, self.resize_size)
-            mask_image = ifft2c_tensor(mask_kspace, self.fftshift_dim)
-            # mask kspace reference
-            # mask_kspace_ref = resize_on_kspace(mask_kspace_ref, self.resize_size)
-            mask_image_ref = ifft2c_tensor(mask_kspace_ref, self.fftshift_dim)
-            # full image
-            # full_kspace = resize_on_kspace(kspace_torch, self.resize_size)
-            full_image = ifft2c_tensor(kspace_torch, self.fftshift_dim)
-            # full image reference
-            # full_kspace_ref = resize_on_kspace(kspace_torch_ref, self.resize_size)
-            full_image_ref = ifft2c_tensor(kspace_torch_ref, self.fftshift_dim)
+        # phase scale
+        if "phs_scale" in data.keys():
+            phs_scale = torch.from_numpy(data["phs_scale"])
         else:
-            raise ValueError('``resize_type`` must be one of the ``on_image`` and ``on_kspace``, '
-                             'but ``{}`` was got.'.format(self.resize_size))
+            phs_scale = full_image.abs()
 
         # apply data format transform
         if self.data_format == 'CF':    # Complex Float
@@ -223,11 +214,11 @@ class UNetDataTransform:
         label = normalize_apply(label, mean, std, eps=1e-12)
         input_ref = normalize_apply(input_ref, mean, std, eps=1e-12)
         label_ref = normalize_apply(label_ref, mean, std, eps=1e-12)
+        phs_scale = normalize_apply(phs_scale, mean, std, eps=1e-12)
 
         # temperature map mask
         if use_tmap_mask is True:
             tmap_mask = torch.from_numpy(data["tmap_mask"])
-            # tmap_mask = resize(tmap_mask_torch, self.resize_size, mode="nearest")
         else:
             tmap_mask = torch.ones(label.shape)
 
@@ -240,6 +231,7 @@ class UNetDataTransform:
             mean=mean,
             std=std,
             tmap_mask=tmap_mask,
+            phs_scale=phs_scale,
             file_name=data["file_name"],
             frame_idx=data["frame_idx"],
             slice_idx=data["slice_idx"],

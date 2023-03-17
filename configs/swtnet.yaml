@@ -8,20 +8,23 @@ DIRECT:
     ACCELERATION: 4             # Variable Param 03
     CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
   MODEL:
-    IN_CHANNELS: 2              # Fixed Param
-    OUT_CHANNELS: 2             # Fixed Param
-    BASE_CHANNELS: 32           # Variable Param 07 recommend 32
-    LEVEL_NUM: 4                # Variable Param 08 recommend 4
-    DROP_PROB: 0.0              # Variable Param 09 毫无影响
-    LEAKYRELU_SLOPE: 0.1        # Variable Param 10 recommend 0.1
-    LAST_LAYER_WITH_ACT: False  # Variable Param 11 几乎无影响
-    LR: 5e-4                    # Variable Param 12 recommend 1e-3
-    LR_STEP_SIZE: 40            # Variable Param 13
-    LR_GAMMA: 0.1               # Variable Param 14
-    WEIGHT_DECAY: 1e-4          # Variable Param 15 recommend 1e-4
+    UPSCALE: 1
+    IN_CHANNELS: 2
+    IMG_SIZE: [96, 96]
+    PATCH_SIZE: 1
+    WINDOW_SIZE: 8
+    IMG_RANGE: 1.0
+    DEPTHS: [6, 6, 6, 6, 6, 6]
+    EMBED_DIM: 180
+    NUM_HEADS: [6, 6, 6, 6, 6, 6]
+    MLP_RATIO: 2.0
+    UPSAMPLER: ''
+    RESI_CONNECTION: '1conv'
+    LR: 2e-4                    # Variable Param 12 recommend 1e-3
+    WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
     MAX_EPOCHS: 200             # Independent Param
   LOG:
-    LOG_NAME: "exp0313-2'-2|decoupled-loss|with_phs_scale"  # Baseline
+    LOG_NAME: 'exp0316-1|union-augs_decoupled_loss'  # Baseline
     LOG_IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
     LOG_IMAGES_FREQ: 50         # Independent Param
     TMAP_PATCH_RATE: 4          # Independent Param
@@ -29,8 +32,8 @@ DIRECT:
     TMAP_ABLATION_THRESH: 43    # Independent Param
   AUGS:
     AP_SHUFFLE: False
-    UNION: False
-    OBJS: ["phs"]
+    UNION: True
+    OBJS: []
     AP_LOGIC: "and"
     AUGS_LIST: ["crop", "rotate", "blur", "flip"]
     COMPOSE_NUM: 1

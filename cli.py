@@ -17,6 +17,10 @@ class FastmrtCLI:
                             help="(str optional) Path of r-unet config saving, default is './configs/runet.yaml'")
         parser.add_argument('--cunet_config_dir', type=str, default=dir_cfg["CUNET_CONFIG_DIR"],
                             help="(str optional) Path of c-unet config saving, default is './configs/cunet.yaml'")
+        parser.add_argument('--resunet_config_dir', type=str, default=dir_cfg["RESUNET_CONFIG_DIR"],
+                            help="(str optional) Path of r-unet config saving, default is './configs/resunet.yaml'")
+        parser.add_argument('--swtnet_config_dir', type=str, default=dir_cfg["SWTNET_CONFIG_DIR"],
+                            help="(str optional) Path of r-unet config saving, default is './configs/swtnet.yaml'")
         parser.add_argument('--casnet_config_dir', type=str, default=dir_cfg["CASNET_CONFIG_DIR"],
                             help="(str optional) Path of casnet config saving, default is './configs/casnet.yaml'")
         parser.add_argument('--rftnet_config_dir', type=str, default=dir_cfg["RFTNET_CONFIG_DIR"],
@@ -24,7 +28,6 @@ class FastmrtCLI:
         parser.add_argument('--kdnet_config_dir', type=str, default=dir_cfg["KDNET_CONFIG_DIR"],
                             help="(str optional) Path of rftnet config saving, default is './configs/kdnet.yaml'")
         return parser
-
 
     @staticmethod
     def prf_cli(parser: ArgumentParser, prf_cfg: dict):
@@ -68,11 +71,6 @@ class FastmrtCLI:
                             help="(int request) acceleration of fastMRT")
         parser.add_argument('--center_fraction', type=float, default=data_cfg["CENTER_FRACTION"],
                             help="(float request) center fraction of mask")
-        parser.add_argument('--resize_size', type=int, default=data_cfg["RESIZE_SIZE"], nargs='+',
-                            help="(tuple optional) Resize size of input image, default is (256, 256)")
-        parser.add_argument('--resize_mode', type=str, default=data_cfg["RESIZE_MODE"],
-                            help="(str optional) Resize mode is one of ``on_image`` and ``on_kspace``,"
-                                 "default is ``on_kspace``")
         # model configs
         parser.add_argument('--in_channels', type=int, default=model_cfg["IN_CHANNELS"],
                             help="(int optional) Input channels of unet model, default is 2")
@@ -151,7 +149,7 @@ class FastmrtCLI:
 
     @staticmethod
     def cunet_cli(parser: ArgumentParser, config: dict):
-        # obtain sub configs
+         # obtain sub configs
         sf_cfg = None
         if parser.parse_args().stage == "train" or parser.parse_args().stage == "fine-tune":
             sub_config = config["DIRECT"]
@@ -165,7 +163,6 @@ class FastmrtCLI:
         model_cfg = sub_config["MODEL"]
         log_cfg = sub_config["LOG"]
         augs_cfg = sub_config["AUGS"]
-
 
         # dataset configs
         parser.add_argument('--data_format', type=str, default=data_cfg["DATA_FORMAT"],
@@ -208,6 +205,108 @@ class FastmrtCLI:
                             help="(int optional) Learning rate step size, default is 40")
         parser.add_argument('--lr_gamma', type=float, default=model_cfg["LR_GAMMA"],
                             help="(float optional) Learning rate gamma decay, default is 0.1")
+        parser.add_argument('--weight_decay', type=float, default=model_cfg["WEIGHT_DECAY"],
+                            help="(float optional) Parameter for penalizing weights norm. Defaults is 0.0")
+        parser.add_argument('--max_epochs', type=float, default=model_cfg["MAX_EPOCHS"],
+                            help="(int optional) The max epoch for training, default is 150")
+        # log_configs
+        parser.add_argument('--log_name', type=str, default=log_cfg["LOG_NAME"],
+                            help="(str optional) Directory name of log, default is empty")
+        parser.add_argument('--log_images_frame_idx', type=int, default=log_cfg["LOG_IMAGES_FRAME_IDX"],
+                            help="(int, optional) Images and tmaps with this frame index for saving, default is 6")
+        parser.add_argument('--log_images_freq', type=int, default=log_cfg["LOG_IMAGES_FREQ"],
+                            help="(int, optional) To control the frequency of saving images' log")
+        parser.add_argument('--tmap_patch_rate', type=int, default=log_cfg["TMAP_PATCH_RATE"],
+                            help="(int optional) The patch size is one over ``tmap_patch_rate`` of source image, "
+                                 "default is 12")
+        parser.add_argument('--tmap_max_temp_thresh', type=int, default=log_cfg["TMAP_MAX_TEMP_THRESH"],
+                            help="(int optional) When max temperature of tmap patch is over ``tmap_max_temp_thresh``,"
+                                 " we recode the max temperature error, default is 45(℃)")
+        parser.add_argument('--tmap_ablation_thresh', type=int, default=log_cfg["TMAP_ABLATION_THRESH"],
+                            help="(int optional) When temperature is over ``TMAP_ABLATION_THRESH``,"
+                                 " we regard the issue is ablated, default is 57(℃)")
+        # augs config
+        parser.add_argument('--ap_shuffle', type=bool, default=augs_cfg["AP_SHUFFLE"],
+                            help="")
+        parser.add_argument('--union', type=bool, default=augs_cfg["UNION"],
+                            help="")
+        parser.add_argument('--objs', type=str, default=augs_cfg["OBJS"], nargs='+',
+                            help="")
+        parser.add_argument('--ap_logic', type=str, default=augs_cfg["AP_LOGIC"],
+                            help="")
+        parser.add_argument('--augs_list', type=str, default=augs_cfg["AUGS_LIST"], nargs='+',
+                            help="")
+        parser.add_argument('--compose_num', type=int, default=augs_cfg["COMPOSE_NUM"],
+                            help="")
+        if sf_cfg is not None:
+            parser.add_argument('--sf_type', type=str, default=sf_cfg["SF_TYPE"],
+                                help="(str, optional) Simulated focus type, one of ``gaussian`` and ``kwave``")
+            parser.add_argument('--sf_frame_num', type=int, default=sf_cfg["SF_FRAME_NUM"],
+                                help="(int, optional) Simulated focus frame number")
+            parser.add_argument('--sf_cooling_time_rate', type=float, default=sf_cfg["SF_COOLING_TIME_RATE"],
+                                help="(float optional) Cooling time over simulated sequence time")
+            parser.add_argument('--sf_center_crop_size', type=int, default=sf_cfg["SF_CENTER_CROP_SIZE"],
+                                help="center crop size")
+            parser.add_argument('--sf_random_crop_size', type=int, default=sf_cfg["SF_RANDOM_CROP_SIZE"],
+                                help="random crop size")
+            parser.add_argument('--sf_max_delta_temp', type=float, default=sf_cfg["SF_MAX_DELTA_TEMP"],
+                                help="max delta temperature")
+        return parser
+        
+    def resunet_cli(parser: ArgumentParser, config: dict):
+        # obtain sub configs
+        sf_cfg = None
+        if parser.parse_args().stage == "train" or parser.parse_args().stage == "fine-tune":
+            sub_config = config["DIRECT"]
+            ft_config = config["FINE_TUNE"]["MODEL"]
+        elif parser.parse_args().stage == "pre-train":
+            sub_config = config["PRETRAIN"]
+            sf_cfg = sub_config["SF"]
+        else:
+            raise ValueError("stage must be one of ``train``, ``pre-train``, ``fine-tune``, ``test``")
+        data_cfg = sub_config["DATA"]
+        model_cfg = sub_config["MODEL"]
+        log_cfg = sub_config["LOG"]
+        augs_cfg = sub_config["AUGS"]
+
+        # dataset configs
+        parser.add_argument('--data_format', type=str, default=data_cfg["DATA_FORMAT"],
+                            help="(str optional) One of 'CF'(Complex Float), 'RF'(Real Float), 'TM'(Temperature Map)"
+                                 " and 'AP'(Amplitude & Phase), default is 'RF'")
+        parser.add_argument('--batch_size', type=int, default=data_cfg["BATCH_SIZE"],
+                            help="(int optional) Batch size of dataset")
+        parser.add_argument('--sampling_mode', type=str, default=data_cfg["SAMPLING_MODE"],
+                            help="(str optional) Sampling mode is one of ``RANDOM`` and ``EQUISQUARE``,"
+                                 " default is ``RANDOM``")
+        parser.add_argument('--acceleration', type=int, default=data_cfg["ACCELERATION"],
+                            help="(int request) acceleration of fastMRT")
+        parser.add_argument('--center_fraction', type=float, default=data_cfg["CENTER_FRACTION"],
+                            help="(float request) center fraction of mask")
+        # model configs
+        parser.add_argument('--in_channels', type=int, default=model_cfg["IN_CHANNELS"],
+                            help="(int optional) Input channels of unet model, default is 2")
+        parser.add_argument('--out_channels', type=int, default=model_cfg["OUT_CHANNELS"],
+                            help="(int optional) Output channels of unet model, default is 2")
+        parser.add_argument('--base_channels', type=int, default=model_cfg["BASE_CHANNELS"],
+                            help="(int optional) Base channels of unet model, which doubles channels base on it,"
+                                 " default is 32")
+        
+        parser.add_argument('--ch_mult', type=int, default=model_cfg["CH_MULT"], nargs="+",
+                            help="(float, optional) ")
+        parser.add_argument('--attn', type=int, default=model_cfg["ATTN"], nargs="+",
+                            help="(bool, optional)")
+        parser.add_argument('--num_res_block', type=int, default=model_cfg["NUM_RES_BLOCK"],
+                            help="(bool, optional)")
+        parser.add_argument('--drop_prob', type=float, default=model_cfg["DROP_PROB"],
+                            help="(float, optional) Probability of dropout method, default is 0.0")
+        if parser.parse_args().stage == "fine-tune":
+            parser.add_argument('--lr', type=float, default=ft_config["LR"],
+                                help="(float, optional) Learning rate for fine-tune, default is 1e-7")
+            parser.add_argument('--model_dir', type=str, default=ft_config["MODEL_DIR"],
+                                help="(str, optional) Pre-trained model path")
+        else:
+            parser.add_argument('--lr', type=float, default=model_cfg["LR"],
+                                help="(float, optional) Learning rate, default is 1e-3")
         parser.add_argument('--weight_decay', type=float, default=model_cfg["WEIGHT_DECAY"],
                             help="(float optional) Parameter for penalizing weights norm. Defaults is 0.0")
         parser.add_argument('--max_epochs', type=float, default=model_cfg["MAX_EPOCHS"],
@@ -452,16 +551,10 @@ class FastmrtCLI:
                                  " default is 32")
         parser.add_argument('--level_num_tea', type=int, default=model_tea_cfg["LEVEL_NUM"],
                             help="(int, optional) The level num (depth) of unet model, default is 4")
-        parser.add_argument('--drop_prob_tea', type=float, default=model_tea_cfg["DROP_PROB"],
-                            help="(float, optional) Probability of dropout method, default is 0.0")
-        parser.add_argument('--leakyrelu_slope_tea', type=float, default=model_tea_cfg["LEAKYRELU_SLOPE"],
-                            help="(float, optional) leaky relu slope, default is 0.4")
         parser.add_argument('--last_layer_with_act_tea', type=bool, default=model_tea_cfg["LAST_LAYER_WITH_ACT"],
                             help="(bool, optional) last layer use activation function, default is False")
-        parser.add_argument('--lr_tea', type=float, default=model_tea_cfg["LR"],
-                            help="(float, optional) Learning rate, default is 1e-3")
-        parser.add_argument('--weight_decay_tea', type=float, default=model_tea_cfg["WEIGHT_DECAY"],
-                            help="(float optional) Parameter for penalizing weights norm. Defaults is 0.0")
+        parser.add_argument('--model_dir', type=str, default=model_tea_cfg["MODEL_DIR"],
+                            help="(str, optional) ")
         # student model configs
         parser.add_argument('--base_channels_stu', type=int, default=model_stu_cfg["BASE_CHANNELS"],
                             help="(int optional) Base channels of unet model, which doubles channels base on it,"
@@ -507,4 +600,118 @@ class FastmrtCLI:
                             help="")
         parser.add_argument('--compose_num', type=int, default=augs_cfg["COMPOSE_NUM"],
                             help="")
+        return parser
+
+    @staticmethod
+    def swtnet_cli(parser: ArgumentParser, config: dict):
+        # obtain sub configs
+        sf_cfg = None
+        if parser.parse_args().stage == "train" or parser.parse_args().stage == "fine-tune":
+            sub_config = config["DIRECT"]
+            ft_config = config["FINE_TUNE"]["MODEL"]
+        elif parser.parse_args().stage == "pre-train":
+            sub_config = config["PRETRAIN"]
+            sf_cfg = sub_config["SF"]
+        else:
+            raise ValueError("stage must be one of ``train``, ``pre-train``, ``fine-tune``, ``test``")
+        data_cfg = sub_config["DATA"]
+        model_cfg = sub_config["MODEL"]
+        log_cfg = sub_config["LOG"]
+        augs_cfg = sub_config["AUGS"]
+
+
+        # dataset configs
+        parser.add_argument('--data_format', type=str, default=data_cfg["DATA_FORMAT"],
+                            help="(str optional) One of 'CF'(Complex Float), 'RF'(Real Float), 'TM'(Temperature Map)"
+                                 " and 'AP'(Amplitude & Phase), default is 'RF'")
+        parser.add_argument('--batch_size', type=int, default=data_cfg["BATCH_SIZE"],
+                            help="(int optional) Batch size of dataset")
+        parser.add_argument('--sampling_mode', type=str, default=data_cfg["SAMPLING_MODE"],
+                            help="(str optional) Sampling mode is one of ``RANDOM`` and ``EQUISQUARE``,"
+                                 " default is ``RANDOM``")
+        parser.add_argument('--acceleration', type=int, default=data_cfg["ACCELERATION"],
+                            help="(int request) acceleration of fastMRT")
+        parser.add_argument('--center_fraction', type=float, default=data_cfg["CENTER_FRACTION"],
+                            help="(float request) center fraction of mask")
+        # model configs
+        parser.add_argument('--in_channels', type=int, default=model_cfg["IN_CHANNELS"],
+                            help="(int optional) Input channels of unet model, default is 2")
+        parser.add_argument('--upscale', type=int, default=model_cfg["UPSCALE"],
+                            help="(int optional) Input channels of unet model, default is 2")
+        parser.add_argument('--img_size', type=int, default=model_cfg["IMG_SIZE"], nargs='+',
+                            help="(int optional) ")
+        parser.add_argument('--patch_size', type=int, default=model_cfg["PATCH_SIZE"],
+                            help="(int optional) ,"
+                                 " default is 1")
+        parser.add_argument('--window_size', type=int, default=model_cfg["WINDOW_SIZE"],
+                            help="(int optional) ,"
+                                 " default is 8")
+        parser.add_argument('--img_range', type=float, default=model_cfg["IMG_RANGE"],
+                            help="(float, optional)")
+        parser.add_argument('--depths', type=int, default=model_cfg["DEPTHS"], nargs='+',
+                            help="(int, optional) ")
+        parser.add_argument('--embed_dim', type=int, default=model_cfg["EMBED_DIM"],
+                            help="(int, optional) ")
+        parser.add_argument('--num_heads', type=int, default=model_cfg["NUM_HEADS"], nargs='+',
+                            help="(int, optional) ")
+        if parser.parse_args().stage == "fine-tune":
+            parser.add_argument('--lr', type=float, default=ft_config["LR"],
+                                help="(float, optional) Learning rate for fine-tune, default is 1e-7")
+            parser.add_argument('--model_dir', type=str, default=ft_config["MODEL_DIR"],
+                                help="(str, optional) Pre-trained model path")
+        else:
+            parser.add_argument('--lr', type=float, default=model_cfg["LR"],
+                                help="(float, optional) Learning rate, default is 1e-3")
+        parser.add_argument('--mlp_ratio', type=float, default=model_cfg["MLP_RATIO"],
+                            help="(float optional) ")
+        parser.add_argument('--upsampler', type=str, default=model_cfg["UPSAMPLER"],
+                            help="(str optional) ")
+        parser.add_argument('--resi_connection', type=str, default=model_cfg["RESI_CONNECTION"],
+                            help="(str optional) ")
+        parser.add_argument('--weight_decay', type=float, default=model_cfg["WEIGHT_DECAY"],
+                            help="(float optional) Parameter for penalizing weights norm. Defaults is 0.0")
+        parser.add_argument('--max_epochs', type=int, default=model_cfg["MAX_EPOCHS"],
+                            help="(int optional) The max epoch for training, default is 150")
+        # log_configs
+        parser.add_argument('--log_name', type=str, default=log_cfg["LOG_NAME"],
+                            help="(str optional) Directory name of log, default is empty")
+        parser.add_argument('--log_images_frame_idx', type=int, default=log_cfg["LOG_IMAGES_FRAME_IDX"],
+                            help="(int, optional) Images and tmaps with this frame index for saving, default is 6")
+        parser.add_argument('--log_images_freq', type=int, default=log_cfg["LOG_IMAGES_FREQ"],
+                            help="(int, optional) To control the frequency of saving images' log")
+        parser.add_argument('--tmap_patch_rate', type=int, default=log_cfg["TMAP_PATCH_RATE"],
+                            help="(int optional) The patch size is one over ``tmap_patch_rate`` of source image, "
+                                 "default is 12")
+        parser.add_argument('--tmap_max_temp_thresh', type=int, default=log_cfg["TMAP_MAX_TEMP_THRESH"],
+                            help="(int optional) When max temperature of tmap patch is over ``tmap_max_temp_thresh``,"
+                                 " we recode the max temperature error, default is 45(℃)")
+        parser.add_argument('--tmap_ablation_thresh', type=int, default=log_cfg["TMAP_ABLATION_THRESH"],
+                            help="(int optional) When temperature is over ``TMAP_ABLATION_THRESH``,"
+                                 " we regard the issue is ablated, default is 57(℃)")
+        # augs config
+        parser.add_argument('--ap_shuffle', type=bool, default=augs_cfg["AP_SHUFFLE"],
+                            help="")
+        parser.add_argument('--union', type=bool, default=augs_cfg["UNION"],
+                            help="")
+        parser.add_argument('--objs', type=str, default=augs_cfg["OBJS"], nargs='+',
+                            help="")
+        parser.add_argument('--ap_logic', type=str, default=augs_cfg["AP_LOGIC"],
+                            help="")
+        parser.add_argument('--augs_list', type=str, default=augs_cfg["AUGS_LIST"], nargs='+',
+                            help="")
+        parser.add_argument('--compose_num', type=int, default=augs_cfg["COMPOSE_NUM"],
+                            help="")
+        if sf_cfg is not None:
+            parser.add_argument('--sf_type', type=str, default=sf_cfg["SF_TYPE"],
+                                help="(str, optional) Simulated focus type, one of ``gaussian`` and ``kwave``")
+            parser.add_argument('--sf_frame_num', type=int, default=sf_cfg["SF_FRAME_NUM"],
+                                help="(int, optional) Simulated focus frame number")
+            parser.add_argument('--sf_cooling_time_rate', type=float, default=sf_cfg["SF_COOLING_TIME_RATE"],
+                                help="(float optional) Cooling time over simulated sequence time")
+            parser.add_argument('--sf_center_crop_size', type=int, default=sf_cfg["SF_CENTER_CROP_SIZE"],
+                                help="center crop size")
+            parser.add_argument('--sf_random_crop_size', type=int, default=sf_cfg["SF_RANDOM_CROP_SIZE"],
+                                help="random crop size")
+            parser.add_argument('--sf_max_delta_temp', type=float, default=sf_cfg["SF_MAX_DELTA_TEMP"],
+                                help="max delta temperature")
         return parser

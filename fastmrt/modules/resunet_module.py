@@ -3,30 +3,27 @@ import random
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
-from fastmrt.models.runet import Unet
 from fastmrt.models.resunet import UNet as ResUnet
 from fastmrt.modules.base_module import BaseModule
 from fastmrt.utils.normalize import denormalize
-from fastmrt.data.prf import PrfFunc
-from fastmrt.utils.trans import real_tensor_to_complex_tensor as rt2ct
 from fastmrt.utils.trans import complex_tensor_to_real_tensor as ct2rt
-from typing import Sequence, Dict
+from fastmrt.utils.trans import real_tensor_to_complex_tensor as rt2ct
+from fastmrt.data.prf import PrfFunc
+from typing import Sequence, Dict, List
 
 
-class UNetModule(BaseModule):
+class ResUNetModule(BaseModule):
     def __init__(
             self,
             in_channels: int,
             out_channels: int,
             base_channels: int = 32,
-            level_num: int = 4,
-            drop_prob: float = 0.0,
-            leakyrelu_slope: float = 0.1,
-            last_layer_with_act: bool = False,
-            lr: float = 5e-4,
-            lr_step_size: int = 40,
-            lr_gamma: float = 0.1,
-            weight_decay: float = 1e-4,
+            ch_mult: List[int] = [1, 2, 2, 2],
+            attn: List[int] = [3],
+            num_res_blocks: int = 2,
+            drop_prob: float = 0.1,
+            lr: float = 1e-3,
+            weight_decay: float = 0.0,
             tmap_prf_func: PrfFunc = None,
             tmap_patch_rate: int = 4,
             tmap_max_temp_thresh: int = 45,
@@ -34,42 +31,48 @@ class UNetModule(BaseModule):
             log_images_frame_idx: int = 5,  # recommend 4 ~ 8
             log_images_freq: int = 50,
     ):
-        super(UNetModule, self).__init__(tmap_prf_func=tmap_prf_func,
-                                         tmap_patch_rate=tmap_patch_rate,
-                                         tmap_max_temp_thresh=tmap_max_temp_thresh,
-                                         tmap_ablation_thresh=tmap_ablation_thresh,
-                                         log_images_frame_idx=log_images_frame_idx,
-                                         log_images_freq=log_images_freq)
+        super(ResUNetModule, self).__init__(tmap_prf_func=tmap_prf_func,
+                                            tmap_patch_rate=tmap_patch_rate,
+                                            tmap_max_temp_thresh=tmap_max_temp_thresh,
+                                            tmap_ablation_thresh=tmap_ablation_thresh,
+                                            log_images_frame_idx=log_images_frame_idx,
+                                            log_images_freq=log_images_freq)
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.base_channels = base_channels
-        self.level_num = level_num
+        self.ch_mult = ch_mult
+        self.attn = attn
+        self.num_res_blocks = num_res_blocks
         self.drop_prob = drop_prob
-        self.leakyrelu_slope = leakyrelu_slope
-        self.last_layer_with_act = last_layer_with_act
         self.lr = lr
-        self.lr_step_size = lr_step_size
-        self.lr_gamma = lr_gamma
         self.weight_decay = weight_decay
-        self.model = Unet(in_channels=self.in_channels,
-                          out_channels=self.out_channels,
-                          base_channels=self.base_channels,
-                          level_num=self.level_num,
-                          drop_prob=self.drop_prob,
-                          leakyrelu_slope=self.leakyrelu_slope,
-                          last_layer_with_act=self.last_layer_with_act,
-                          )
-        # self.model = ResUnet(inout_ch=2, ch=128, ch_mult=[1, 2, 2, 2], attn=[1], num_res_blocks=2, dropout=0.1)
+        self.model = ResUnet(in_channels=self.in_channels,
+                             out_channels=self.out_channels,
+                             base_channels=self.base_channels,
+                             ch_mult=self.ch_mult,
+                             attn=self.attn,
+                             num_res_blocks=self.num_res_blocks,
+                             drop_prob=self.drop_prob,
+                             )
 
     def training_step(self, batch, batch_idx):
-        train_loss = self._decoupled_loss_v4(batch)
+        amp_loss, phs_loss = self._decoupled_loss_v3(batch)
+        train_loss = amp_loss + phs_loss
 
-        return {"loss": train_loss}
+        return {"amp_loss": amp_loss,
+                "phs_loss": phs_loss,
+                "loss": train_loss}
 
     def training_epoch_end(self, train_logs: Sequence[Dict]) -> None:
+        amp_loss = torch.tensor(0, dtype=torch.float32, device='cuda')
+        phs_loss = torch.tensor(0, dtype=torch.float32, device='cuda')
         train_loss = torch.tensor(0, dtype=torch.float32, device='cuda')
         for log in train_logs:
+            amp_loss += log["amp_loss"]
+            phs_loss += log["phs_loss"]
             train_loss += log["loss"]
+        self.log("amp_loss", amp_loss, on_epoch=True, on_step=False)
+        self.log("phs_loss", phs_loss, on_epoch=True, on_step=False)
         self.log("loss", train_loss, on_epoch=True, on_step=False)
 
     def validation_step(self, batch, batch_idx):
@@ -118,16 +121,12 @@ class UNetModule(BaseModule):
         optimizer = torch.optim.Adam(self.parameters(),
                                      lr=self.lr,
                                      weight_decay=self.weight_decay)
-        # scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer,
-        #                                             step_size=self.lr_step_size,
-        #                                             gamma=self.lr_gamma)
-
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,
                                                                T_max=200,
                                                                last_epoch=-1)
         return [optimizer], [scheduler]
 
-    def _l1_loss(self, batch):
+    def _normal_training(self, batch):
         output = self.model(batch.input)
         train_loss = F.l1_loss(output, batch.label)
         return train_loss
@@ -141,28 +140,35 @@ class UNetModule(BaseModule):
         amp_loss = F.l1_loss(output_complex.abs(), label_complex.abs())
 
         # phase loss
-        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * batch.phs_scale).abs().sum(0).mean()
+        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * batch.tmap_mask).abs().sum(0).mean()
 
-        # train_loss
-        train_loss = amp_loss + phs_loss / torch.pi
+        return amp_loss, phs_loss
 
-        return train_loss
-
-    def _decoupled_loss_v4(self, batch):
-        """decoupled loss after de-normalize"""
+    def _decoupled_loss_v2(self, batch):
         output = self.model(batch.input)
-        mean = batch.mean.unsqueeze(1).unsqueeze(2).unsqueeze(3)
-        std = batch.std.unsqueeze(1).unsqueeze(2).unsqueeze(3)
-        output_complex = rt2ct(denormalize(output, mean, std))
-        label_complex = rt2ct(denormalize(batch.label, mean, std))
+        output_complex = rt2ct(output)
+        label_complex = rt2ct(batch.label)
+
+        # union loss
+        union_loss = F.l1_loss(output, batch.input)
 
         # amplitude loss
         amp_loss = F.l1_loss(output_complex.abs(), label_complex.abs())
 
         # phase loss
-        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * label_complex.abs()).abs().sum(0).mean()
+        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * batch.tmap_mask).abs().sum(0).mean()
 
-        # train_loss
-        train_loss = amp_loss + phs_loss / torch.pi
+        return amp_loss, phs_loss, union_loss
 
-        return train_loss
+    def _decoupled_loss_v3(self, batch):
+        output = self.model(batch.input)
+        output_complex = rt2ct(output)
+        label_complex = rt2ct(batch.label)
+
+        # amplitude loss
+        amp_loss = F.l1_loss(output_complex.abs(), label_complex.abs())
+
+        # phase loss
+        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * batch.phs_scale).abs().sum(0).mean()
+
+        return amp_loss, phs_loss / torch.pi
