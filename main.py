@@ -172,8 +172,6 @@ def run_runet(args):
                              leakyrelu_slope=args.leakyrelu_slope,
                              last_layer_with_act=args.last_layer_with_act,
                              lr=args.lr,
-                             lr_step_size=args.lr_step_size,
-                             lr_gamma=args.lr_gamma,
                              weight_decay=args.weight_decay,
                              tmap_prf_func=prf_func,
                              tmap_patch_rate=args.tmap_patch_rate,
@@ -903,7 +901,7 @@ def run_kdnet(args):
                                     collate_fn=collate_fn)
 
     # Create teacher and student model
-    tea_net = ResUNet(in_channels=args.in_channels,
+    tea_net = Unet(in_channels=args.in_channels,
                    out_channels=args.out_channels,
                    base_channels=args.base_channels_tea)
     module_state_dict = torch.load(args.model_dir)["state_dict"]
@@ -917,7 +915,7 @@ def run_kdnet(args):
     for model_key, module_key in zip(model_state_dict, module_state_dict):
         model_state_dict[model_key] = module_state_dict[module_key]
     tea_net.load_state_dict(model_state_dict)
-    stu_net = ResUNet(in_channels=args.in_channels,
+    stu_net = Unet(in_channels=args.in_channels,
                    out_channels=args.out_channels,
                    base_channels=args.base_channels_stu)
 

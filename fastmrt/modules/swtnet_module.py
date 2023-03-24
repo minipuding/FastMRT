@@ -68,7 +68,7 @@ class SwtNetModule(BaseModule):
         # self.model = ResUnet(inout_ch=2, ch=128, ch_mult=[1, 2, 2, 2], attn=[1], num_res_blocks=2, dropout=0.1)
 
     def training_step(self, batch, batch_idx):
-        train_loss = self._decoupled_loss(batch)
+        train_loss = self._normal_training(batch)
 
         return {"loss": train_loss}
 

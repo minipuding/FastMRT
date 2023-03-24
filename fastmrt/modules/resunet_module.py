@@ -56,23 +56,14 @@ class ResUNetModule(BaseModule):
                              )
 
     def training_step(self, batch, batch_idx):
-        amp_loss, phs_loss = self._decoupled_loss_v3(batch)
-        train_loss = amp_loss + phs_loss
+        train_loss = self._normal_training(batch)
 
-        return {"amp_loss": amp_loss,
-                "phs_loss": phs_loss,
-                "loss": train_loss}
+        return {"loss": train_loss}
 
     def training_epoch_end(self, train_logs: Sequence[Dict]) -> None:
-        amp_loss = torch.tensor(0, dtype=torch.float32, device='cuda')
-        phs_loss = torch.tensor(0, dtype=torch.float32, device='cuda')
         train_loss = torch.tensor(0, dtype=torch.float32, device='cuda')
         for log in train_logs:
-            amp_loss += log["amp_loss"]
-            phs_loss += log["phs_loss"]
             train_loss += log["loss"]
-        self.log("amp_loss", amp_loss, on_epoch=True, on_step=False)
-        self.log("phs_loss", phs_loss, on_epoch=True, on_step=False)
         self.log("loss", train_loss, on_epoch=True, on_step=False)
 
     def validation_step(self, batch, batch_idx):
@@ -140,35 +131,6 @@ class ResUNetModule(BaseModule):
         amp_loss = F.l1_loss(output_complex.abs(), label_complex.abs())
 
         # phase loss
-        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * batch.tmap_mask).abs().sum(0).mean()
+        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * label_complex.abs()).abs().sum(0).mean()
 
-        return amp_loss, phs_loss
-
-    def _decoupled_loss_v2(self, batch):
-        output = self.model(batch.input)
-        output_complex = rt2ct(output)
-        label_complex = rt2ct(batch.label)
-
-        # union loss
-        union_loss = F.l1_loss(output, batch.input)
-
-        # amplitude loss
-        amp_loss = F.l1_loss(output_complex.abs(), label_complex.abs())
-
-        # phase loss
-        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * batch.tmap_mask).abs().sum(0).mean()
-
-        return amp_loss, phs_loss, union_loss
-
-    def _decoupled_loss_v3(self, batch):
-        output = self.model(batch.input)
-        output_complex = rt2ct(output)
-        label_complex = rt2ct(batch.label)
-
-        # amplitude loss
-        amp_loss = F.l1_loss(output_complex.abs(), label_complex.abs())
-
-        # phase loss
-        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * batch.phs_scale).abs().sum(0).mean()
-
-        return amp_loss, phs_loss / torch.pi
+        return amp_loss + phs_loss / torch.pi
