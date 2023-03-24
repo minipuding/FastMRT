@@ -48,7 +48,7 @@ class ComplexAugs:
         if augs_list is None:
             augs_list = ["crop", "rotate", "blur", "flip"]
         else:
-            assert isinstance(objs, List)
+            assert isinstance(augs_list, List)
         if compose_num is None or compose_num <= 0:
             compose_num = len(augs_list)
         elif len(augs_list) > 0:

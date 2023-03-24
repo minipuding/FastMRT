@@ -46,7 +46,7 @@ class KDNetModule(BaseModule):
         self.model = KDNet(tea_net, stu_net, use_ema, soft_label_weight)
 
     def training_step(self, batch, batch_idx):
-        tea_loss, stu_loss, soft_label_loss, kd_loss = self._decoupled_loss_v5(batch, beta1=0.63, beta2=0.37)
+        tea_loss, stu_loss, soft_label_loss, kd_loss = self._l1_loss_v2(batch)
 
         return {"loss": kd_loss,
                 "tea_loss": tea_loss,
@@ -161,9 +161,27 @@ class KDNetModule(BaseModule):
 
         return tea_loss, stu_loss, soft_label_loss, kd_loss
 
-    def _decoupled_loss_v5(self, batch, beta1=0.5, beta2=0.5):
+    def _l1_loss_v2(self, batch):
+
         # setting loss weight decay
-        gamma1, gamma2 = 0.6, 0.4
+        gamma = 0.7
+        end_epoch = 200
+        beta = max((1 - self.current_epoch / end_epoch) * gamma, 0)
+
+        # model forward (only forward stu_input)
+        tea_output, stu_output = self.model(batch.input_stu)
+
+        # calculate losses
+        tea_loss = F.l1_loss(tea_output, batch.label)
+        stu_loss = F.l1_loss(stu_output, batch.label)
+        soft_label_loss = F.l1_loss(stu_output, tea_output.clone().detach())
+        kd_loss = (1 - beta) *stu_loss + beta * soft_label_loss
+
+        return tea_loss, stu_loss, soft_label_loss, kd_loss
+
+    def _decoupled_loss_v5(self, batch):
+        # setting loss weight decay
+        gamma1, gamma2 = 0.7, 0.7
         end_epoch = 200
         beta1 = max((1 - self.current_epoch / end_epoch) * gamma1, 0)
         beta2 = max((1 - self.current_epoch / end_epoch) * gamma2, 0)
