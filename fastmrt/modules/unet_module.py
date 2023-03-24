@@ -24,8 +24,6 @@ class UNetModule(BaseModule):
             leakyrelu_slope: float = 0.1,
             last_layer_with_act: bool = False,
             lr: float = 5e-4,
-            lr_step_size: int = 40,
-            lr_gamma: float = 0.1,
             weight_decay: float = 1e-4,
             tmap_prf_func: PrfFunc = None,
             tmap_patch_rate: int = 4,
@@ -48,8 +46,6 @@ class UNetModule(BaseModule):
         self.leakyrelu_slope = leakyrelu_slope
         self.last_layer_with_act = last_layer_with_act
         self.lr = lr
-        self.lr_step_size = lr_step_size
-        self.lr_gamma = lr_gamma
         self.weight_decay = weight_decay
         self.model = Unet(in_channels=self.in_channels,
                           out_channels=self.out_channels,
@@ -62,7 +58,7 @@ class UNetModule(BaseModule):
         # self.model = ResUnet(inout_ch=2, ch=128, ch_mult=[1, 2, 2, 2], attn=[1], num_res_blocks=2, dropout=0.1)
 
     def training_step(self, batch, batch_idx):
-        train_loss = self._decoupled_loss_v4(batch)
+        train_loss = self._l1_loss(batch)
 
         return {"loss": train_loss}
 
@@ -141,7 +137,7 @@ class UNetModule(BaseModule):
         amp_loss = F.l1_loss(output_complex.abs(), label_complex.abs())
 
         # phase loss
-        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * batch.phs_scale).abs().sum(0).mean()
+        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * label_complex.abs()).abs().sum(0).mean()
 
         # train_loss
         train_loss = amp_loss + phs_loss / torch.pi

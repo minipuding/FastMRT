@@ -18,17 +18,17 @@ MODEL_TEA:
   BASE_CHANNELS: 128           # Variable Param 07 recommend 32
   LEVEL_NUM: 4                # Variable Param 08 recommend 4
   LAST_LAYER_WITH_ACT: False  # Variable Param 11 几乎无影响
-  MODEL_DIR: "/home/sxu/SJTU/FastMRT/fastMRT/Codes/logs/RESUNET/36krc026/checkpoints/epoch=199-step=101400.ckpt"
+  MODEL_DIR: "/home/sxu/SJTU/FastMRT/fastMRT/Codes/logs/AUGS/30ycyzjc/checkpoints/epoch=199-step=101400.ckpt"
 MODEL_STU:
   BASE_CHANNELS: 32           # Variable Param 07 recommend 32
   LEVEL_NUM: 4                # Variable Param 08 recommend 4
-  DROP_PROB: 0.1              # Variable Param 09 毫无影响
+  DROP_PROB: 0.0              # Variable Param 09 毫无影响
   LEAKYRELU_SLOPE: 0.1        # Variable Param 10 recommend 0.1
   LAST_LAYER_WITH_ACT: False  # Variable Param 11 几乎无影响
   LR: 5e-4                    # Variable Param 12 recommend 1e-3
-  WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
+  WEIGHT_DECAY: 1e-4          # Variable Param 15 recommend 1e-4
 LOG:
-  LOG_NAME: 'exp0315-1|decoupled-loss_loss-decay_gamma1=0.6_gamma2=0.4_union=True'  # Baseline
+  LOG_NAME: 'exp0322-2|l1-loss-decay_gamma=0.7_union=True|runet128->runet32'  # Baseline
   LOG_IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
   LOG_IMAGES_FREQ: 50         # Independent Param
   TMAP_PATCH_RATE: 4          # Independent Param
