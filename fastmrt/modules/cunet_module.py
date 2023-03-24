@@ -17,12 +17,10 @@ class CUNetModule(BaseModule):
             base_channels: int = 32,
             level_num: int = 4,
             drop_prob: float = 0.0,
-            leakyrelu_slope: float = 0.4,
+            leakyrelu_slope: float = 0.1,
             last_layer_with_act: bool = False,
-            lr: float = 1e-3,
-            lr_step_size: int = 40,
-            lr_gamma: float = 0.1,
-            weight_decay: float = 0.0,
+            lr: float = 4e-5,
+            weight_decay: float = 1e-4,
             tmap_prf_func: PrfFunc = None,
             tmap_patch_rate: int = 4,
             tmap_max_temp_thresh: int = 45,
@@ -44,8 +42,6 @@ class CUNetModule(BaseModule):
         self.leakyrelu_slope = leakyrelu_slope
         self.last_layer_with_act = last_layer_with_act
         self.lr = lr
-        self.lr_step_size = lr_step_size
-        self.lr_gamma = lr_gamma
         self.weight_decay = weight_decay
         self.model = Unet(in_channels=self.in_channels,
                           out_channels=self.out_channels,
@@ -56,14 +52,8 @@ class CUNetModule(BaseModule):
                           last_layer_with_act=self.last_layer_with_act,
                           )
 
-    def training_step(self, batch, batch_idx):
-        output = self.model(batch.input)
-        train_loss = F.l1_loss(output.real, batch.label.real) + F.l1_loss(output.imag, batch.label.imag)
-        if torch.sum(torch.isnan(output.real)) != 0 or torch.sum(torch.isnan(output.imag)):
-            print(torch.sum(torch.isnan(output.real)))
-            print(torch.sum(torch.isnan(output.imag)))
-            import pdb
-            pdb.set_trace()
+    def training_step(self, batch):
+        train_loss = self._decoupled_loss(batch)
         return {"loss": train_loss}
 
     def validation_step(self, batch, batch_idx):
@@ -117,3 +107,22 @@ class CUNetModule(BaseModule):
                                                                T_max=200,
                                                                last_epoch=-1)
         return [optimizer], [scheduler]
+
+    def _l1_loss(self, batch):
+        output = self.model(batch.input)
+        train_loss = F.l1_loss(output.real, batch.label.real) + F.l1_loss(output.imag, batch.label.imag)
+        return train_loss
+    
+    def _decoupled_loss(self, batch):
+        output = self.model(batch.input)
+
+        # amplitude loss
+        amp_loss = F.l1_loss(output.abs(), batch.label.abs())
+
+        # phase loss
+        phs_loss = (torch.angle(output * torch.conj(batch.label)) * batch.label.abs()).abs().sum(0).mean()
+
+        # train_loss
+        train_loss = amp_loss + phs_loss / torch.pi
+
+        return train_loss

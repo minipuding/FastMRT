@@ -84,7 +84,7 @@ class FastmrtDataModule(pl.LightningDataModule):
             dataset=dataset,
             batch_size=self.batch_size,
             shuffle=shuffle,
-            num_workers=12,
+            num_workers=6,
             drop_last=True,
             collate_fn=collate_fn,
             worker_init_fn=self.work_init_fn,

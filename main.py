@@ -40,11 +40,11 @@ def build_args():
     parser = ArgumentParser()
 
     # model choice & load dir config
-    parser.add_argument('--net', type=str, required=False, default="r-unet",
+    parser.add_argument('--net', type=str, required=True,
                         help="(str request) One of 'r-unet', 'casnet', 'gannet', 'complexnet'")
-    parser.add_argument('--stage', type=str, required=False, default="pre-train",
+    parser.add_argument('--stage', type=str, required=True,
                         help="(str request) One of 'train', 'pre-train', 'fine-tune', 'test'")
-    parser.add_argument('--gpus', type=int, required=False, default=[1, 0], nargs='+',
+    parser.add_argument('--gpus', type=int, required=False, default=[0], nargs='+',
                         help="(int request) gpu(s) index")
     parser.add_argument('--dir_config', type=str, default='./configs/dir.yaml',
                         help="(str optional) the directory of config that saves other paths.")
@@ -258,16 +258,12 @@ def run_cunet(args):
                                             prf_func=prf_func,
                                             data_format=args.data_format,
                                             use_random_seed=True,
-                                            resize_size=args.resize_size,
-                                            resize_mode=args.resize_mode,
-                                            fftshift_dim=-2)
+                                            fftshift_dim=(-2, -1))
         val_transform = UNetDataTransform(mask_func=mask_func,
                                             prf_func=prf_func,
                                             data_format=args.data_format,
                                             use_random_seed=False,
-                                            resize_size=args.resize_size,
-                                            resize_mode=args.resize_mode,
-                                            fftshift_dim=-2)
+                                            fftshift_dim=(-2, -1))
     elif args.stage == 'pre-train':
         project_name = "PRETRAIN_CUNET"
         dataset_type = "PT"
@@ -332,8 +328,6 @@ def run_cunet(args):
                                 leakyrelu_slope=args.leakyrelu_slope,
                                 last_layer_with_act=args.last_layer_with_act,
                                 lr=args.lr,
-                                lr_step_size=args.lr_step_size,
-                                lr_gamma=args.lr_gamma,
                                 weight_decay=args.weight_decay,
                                 tmap_prf_func=prf_func,
                                 tmap_patch_rate=args.tmap_patch_rate,
@@ -348,7 +342,7 @@ def run_cunet(args):
     
     # Create Logger & Add Hparams
     logger = loggers.WandbLogger(save_dir=args.log_dir, name=args.log_name, project=project_name)
-    flops, params = thop.profile(unet_module.model, (torch.randn(1, 2, 96, 96), ))
+    flops, params = thop.profile(unet_module.model, (torch.randn(1, 1, 96, 96) + 1j * torch.randn(1, 1, 96, 96), ))
     hparams = {
         "net": args.net,
         "dataset": args.data_dir,
@@ -364,8 +358,6 @@ def run_cunet(args):
         "leakyrelu_slope": args.leakyrelu_slope,
         "last_layer_with_act": args.last_layer_with_act,
         "lr": args.lr,
-        "lr_step_size": args.lr_step_size,
-        "lr_gamma": args.lr_gamma,
         "weight_decay": args.weight_decay,
         "max_epochs": args.max_epochs,
         "augs-ap_shuffle": args.ap_shuffle,
@@ -379,7 +371,7 @@ def run_cunet(args):
 
     # Create Traner
     strategy = 'ddp' if gpus_num > 1 else None
-    
+
     trainer = pl.Trainer(accelerator='gpu',
                         devices="auto",
                         strategy=strategy,

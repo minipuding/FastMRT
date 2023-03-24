@@ -201,10 +201,6 @@ class FastmrtCLI:
         else:
             parser.add_argument('--lr', type=float, default=model_cfg["LR"],
                                 help="(float, optional) Learning rate, default is 1e-3")
-        parser.add_argument('--lr_step_size', type=int, default=model_cfg["LR_STEP_SIZE"],
-                            help="(int optional) Learning rate step size, default is 40")
-        parser.add_argument('--lr_gamma', type=float, default=model_cfg["LR_GAMMA"],
-                            help="(float optional) Learning rate gamma decay, default is 0.1")
         parser.add_argument('--weight_decay', type=float, default=model_cfg["WEIGHT_DECAY"],
                             help="(float optional) Parameter for penalizing weights norm. Defaults is 0.0")
         parser.add_argument('--max_epochs', type=float, default=model_cfg["MAX_EPOCHS"],

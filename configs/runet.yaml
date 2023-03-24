@@ -16,8 +16,6 @@ DIRECT:
     LEAKYRELU_SLOPE: 0.1        # Variable Param 10 recommend 0.1
     LAST_LAYER_WITH_ACT: False  # Variable Param 11 几乎无影响
     LR: 5e-4                    # Variable Param 12 recommend 1e-3
-    LR_STEP_SIZE: 40            # Variable Param 13
-    LR_GAMMA: 0.1               # Variable Param 14
     WEIGHT_DECAY: 1e-4          # Variable Param 15 recommend 1e-4
     MAX_EPOCHS: 200             # Independent Param
   LOG:
