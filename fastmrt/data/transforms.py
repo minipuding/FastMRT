@@ -251,7 +251,6 @@ class CasNetDataTransform:
             prf_func: PrfFunc = None,
             data_format: str = 'RF',
             use_random_seed: bool = True,
-            resize_size: list[int, ...] = (256, 256),
             fftshift_dim: Union[int, Tuple[int, int]] = (-2, -1),
     ):
         """
@@ -262,7 +261,6 @@ class CasNetDataTransform:
         self.prf_func = prf_func
         self.data_format = data_format
         self.use_random_seed = use_random_seed
-        self.resize_size = resize_size
         self.fftshift_dim = fftshift_dim
 
     def __call__(
@@ -346,7 +344,6 @@ class RFTNetDataTransform:
             prf_func: PrfFunc = None,
             data_format: str = 'CF',
             use_random_seed: bool = True,
-            resize_size: list[int, ...] = (256, 256),
             resize_mode: str = 'on_kspace',
             fftshift_dim: Union[int, Tuple[int, int]] = (-2, -1),
     ):
@@ -358,7 +355,6 @@ class RFTNetDataTransform:
         self.prf_func = prf_func
         self.data_format = data_format
         self.use_random_seed = use_random_seed
-        self.resize_size = resize_size
         self.resize_mode = resize_mode
         self.fftshift_dim = fftshift_dim
 
