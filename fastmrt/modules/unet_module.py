@@ -83,10 +83,10 @@ class UNetModule(BaseModule):
             "output_ref": denormalize(output_ref, mean, std),
             "tmap_mask": batch.tmap_mask,
             "val_loss": val_loss,
-            "file_name": batch.file_name,
-            "frame_idx": batch.frame_idx,
-            "slice_idx": batch.slice_idx,
-            "coil_idx": batch.coil_idx,
+            "file_name": batch.metainfo['file_name'],
+            "frame_idx": batch.metainfo['frame_idx'],
+            "slice_idx": batch.metainfo['slice_idx'],
+            "coil_idx": batch.metainfo['coil_idx'],
         }
 
     def test_step(self, batch):

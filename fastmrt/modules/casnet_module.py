@@ -57,27 +57,31 @@ class CasNetModule(BaseModule):
         )
 
     def training_step(self, batch, batch_idx):
-        output = self.model(batch.input, batch.origin_shape, batch.mask)
+        mean = batch.mean.unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        std = batch.std.unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        output = self.model(batch.input, mean, std, batch.mask)
         train_loss = F.l1_loss(output, batch.label)
         return {"loss": train_loss}
 
     def validation_step(self, batch, batch_idx):
-        output = self.model(batch.input, batch.origin_shape, batch.mask)
-        output_ref = self.model(batch.input_ref, batch.origin_shape, batch.mask)
+        mean = batch.mean.unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        std = batch.std.unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        output = self.model(batch.input, mean, std, batch.mask)
+        output_ref = self.model(batch.input_ref, batch.mask)
         val_loss = F.l1_loss(output, batch.label)
         return {
-            "input": batch.input,
-            "label": batch.label,
-            "output": output,
-            "input_ref": batch.input_ref,
-            "label_ref": batch.label_ref,
-            "output_ref": output_ref,
+            "input": denormalize(batch.input, mean, std),
+            "label": denormalize(batch.label, mean, std),
+            "output": denormalize(output, mean, std),
+            "input_ref": denormalize(batch.input_ref, mean, std),
+            "label_ref": denormalize(batch.label_ref, mean, std),
+            "output_ref": denormalize(output_ref, mean, std),
             "tmap_mask": batch.tmap_mask,
             "val_loss": val_loss,
-            "file_name": batch.file_name,
-            "frame_idx": batch.frame_idx,
-            "slice_idx": batch.slice_idx,
-            "coil_idx": batch.coil_idx,
+            "file_name": batch.metainfo['file_name'],
+            "frame_idx": batch.metainfo['frame_idx'],
+            "slice_idx": batch.metainfo['slice_idx'],
+            "coil_idx": batch.metainfo['coil_idx'],
         }
 
     def test_step(self, batch):
@@ -102,23 +106,14 @@ class CasNetModule(BaseModule):
         }
 
     def configure_optimizers(self):
-        # optimizer = torch.optim.SGD(self.parameters(),
-        #                              lr=self.lr,
-        #                              weight_decay=self.weight_decay,
-        #                             momentum=0.9,
-        #                             nesterov=True)
         optimizer = torch.optim.Adam(self.parameters(),
                                      lr=self.lr,
                                      weight_decay=self.weight_decay,
                                      betas=(0.9, 0.999),
                                      eps=1e-8)
-        # optimizer = torch.optim.RMSprop(self.parameters(),
-        #                                 lr=self.lr,
-        #                                 weight_decay=self.weight_decay,
-        #                                 momentum=0.9)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer,
-                                                    step_size=self.lr_step_size,
-                                                    gamma=self.lr_gamma)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,
+                                                               T_max=200,
+                                                               last_epoch=-1)
         return [optimizer], [scheduler]
 
 

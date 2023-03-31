@@ -103,3 +103,10 @@ def complex_tensor_to_amp_phase_tensor(data: torch.Tensor) -> Tuple[torch.Tensor
     else:
         raise ValueError("``data`` must be ``torch.complex64`` or "
                          "``torch.complex128`` type, but a ``{}`` was got".format(data.dtype))
+
+def complex_np_to_amp_phase_np(data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    if np.iscomplexobj(data):
+        return np.abs(data), np.angle(data)
+    else:
+        raise ValueError("``data`` must be ``np.complex64`` or "
+                         "``np.complex128`` type, but a ``{}`` was got".format(data.dtype))

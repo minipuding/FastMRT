@@ -9,7 +9,7 @@ import torch
 
 from fastmrt.utils.fftc import ifft2c_numpy, fft2c_numpy
 from fastmrt.utils.seed import temp_seed
-from fastmrt.data.transforms import UNetDataTransform, CasNetDataTransform, RFTNetDataTransform
+from fastmrt.data.transforms import CasNetDataTransform, RFTNetDataTransform
 from fastmrt.data.mask import MaskFunc
 from fastmrt.data.prf import PrfFunc
 
@@ -33,12 +33,11 @@ class SimuFocus:
     def __call__(
         self,
         shape,
-        rng,
     ):
-        delta_phis = np.append(np.sort(rng.rand(self.frame_num - self.cooling_frame_num)),
-                               np.abs(np.sort(rng.rand(self.cooling_frame_num)) * 0.5 - 1)) * self.max_delta_phi
+        delta_phis = np.append(np.sort(np.random.rand(self.frame_num - self.cooling_frame_num)),
+                               np.abs(np.sort(np.random.rand(self.cooling_frame_num)) * 0.5 - 1)) * self.max_delta_phi
 
-        simufocus_mask = self.generate_simulated_focus(shape, rng)
+        simufocus_mask = self.generate_simulated_focus(shape)
         return {
             "delta_phis": delta_phis,
             "simufocus_mask": simufocus_mask,
@@ -47,7 +46,6 @@ class SimuFocus:
     def generate_simulated_focus(
             self,
             mask_size: Tuple[int, int],
-            rng: np.random.RandomState,
     ):
         raise NotImplementedError
 
@@ -79,10 +77,9 @@ class SimuFocusGaussian(SimuFocus):
     def generate_simulated_focus(
             self,
             mask_size: Tuple[int, int],
-            rng: np.random.RandomState,
     ):
         sigma1 = 0.1
-        sigma2 = sigma1 * (self.sigma_scale_limit[0] + rng.rand() *
+        sigma2 = sigma1 * (self.sigma_scale_limit[0] + np.random.rand() *
                            (self.sigma_scale_limit[1] - self.sigma_scale_limit[0]))
         inv_A = 1 / (sigma1 ** 2)
         inv_B = 1 / (sigma2 ** 2)
@@ -162,7 +159,6 @@ class FastmrtPretrainTransform:
             max_delta_temp: float = 30,
     ):
         super(FastmrtPretrainTransform, self).__init__()
-        self.rng = np.random.RandomState()
         self.use_random_seed = use_random_seed
         if simufocus_type == "gaussian":
             self.simufocus_transform = SimuFocusGaussian(frame_num=frame_num,
@@ -177,9 +173,9 @@ class FastmrtPretrainTransform:
     ):
         seed = None if self.use_random_seed is True else tuple(map(ord, data["fname"]))
         image = ifft2c_numpy(data["kspace"], fftshift_dim=(-2, -1))
-        with temp_seed(self.rng, seed):
-            simulated_data = self.simufocus_transform(data["kspace"].shape, self.rng)
-            interface_data = self.transform_interface(simulated_data, image, self.rng)
+        with temp_seed(seed):
+            simulated_data = self.simufocus_transform(data["kspace"].shape)
+            interface_data = self.transform_interface(simulated_data, image)
         interface_data.update({
             "file_name": data["fname"],
             "slice_idx": data["dataslice"],
@@ -187,8 +183,8 @@ class FastmrtPretrainTransform:
         return interface_data
 
     @staticmethod
-    def transform_interface(simulated_data, image, rng):
-        max_phase = rng.choice(simulated_data["delta_phis"], 1)
+    def transform_interface(simulated_data, image):
+        max_phase = np.random.choice(simulated_data["delta_phis"], 1)
         phase_map = np.exp(1j * max_phase * simulated_data["simufocus_mask"])
         kspace = fft2c_numpy(image * phase_map, fftshift_dim=(-2, -1))
         kspace_ref = fft2c_numpy(image, fftshift_dim=(-2, -1))

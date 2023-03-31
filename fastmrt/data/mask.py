@@ -1,8 +1,5 @@
 """
-Copyright (c) Facebook, Inc. and its affiliates.
-
-This source code is licensed under the MIT license found in the
-LICENSE file in the root directory of this source tree.
+Modified from FastMRI: https://github.com/facebookresearch/fastMRI
 """
 
 from fastmrt.utils.seed import temp_seed
@@ -13,7 +10,7 @@ from abc import ABC, abstractmethod
 
 class MaskFunc(ABC):
     """
-    An object for GRAPPA-style sampling masks.
+    An object for GRAPPA-style sampling masks like fastmri.
 
     This crates a sampling mask that densely samples the center while
     subsampling outer k-space regions based on the undersampling factor.
@@ -34,7 +31,6 @@ class MaskFunc(ABC):
         self,
         center_fraction: float,
         acceleration: int,
-        seed: Optional[int] = None,
     ):
         """
         Args:
@@ -53,12 +49,10 @@ class MaskFunc(ABC):
 
         self.center_fraction = center_fraction
         self.acceleration = acceleration
-        self.rng = np.random.RandomState(seed)
 
     def __call__(
         self,
         shape: Sequence[int],
-        direction: str = 'PE',
         offset: Optional[int] = None,
         seed: Optional[Union[int, Tuple[int, ...]]] = None,
     ) -> Tuple[np.float32, int]:
@@ -67,9 +61,6 @@ class MaskFunc(ABC):
 
         Args:
             shape: Shape of k-space.
-            direction: The down-smapling direction using ``PE`` or ``FE``, which
-                indicates ``phase-encoding direction`` and ``frequency-encoding``,
-                default direction is ``PE``.
             offset: Offset from 0 to begin mask (for equispaced masks). If no
                 offset is given, then one is selected randomly.
             seed: Seed for random number generator for reproducibility.
@@ -81,8 +72,8 @@ class MaskFunc(ABC):
         # if len(shape) < 3:
         #     raise ValueError("Shape should have 3 or more dimensions")
 
-        with temp_seed(self.rng, seed):
-            mask_size = shape[-1] if direction == 'PE' else shape[-2]
+        with temp_seed(seed):
+            mask_size = shape[-1]
             num_low_frequencies = round(mask_size * self.center_fraction)
             center_mask = self.calculate_center_mask(mask_size, shape, num_low_frequencies)
             accel_mask = self.calculate_acceleration_mask(mask_size, offset, num_low_frequencies)
@@ -140,15 +131,9 @@ class MaskFunc(ABC):
             mask: np.ndarray,
             mask_size: int,
             shape: Sequence[int],
-            direction: str = 'PE'
     ):
         reshaped_mask_shape = [1 for _ in shape]
-        if direction == 'PE':
-            reshaped_mask_shape[-1] = mask_size
-        elif direction == 'FE':
-            reshaped_mask_shape[-2] = mask_size
-        else:
-            raise ValueError('``direction`` paramter is uncorrect. It must be ``PE`` or ``FE``.')
+        reshaped_mask_shape[-1] = mask_size
         reshaped_mask = mask.reshape(reshaped_mask_shape)
 
         return reshaped_mask
@@ -185,7 +170,7 @@ class RandomMaskFunc(MaskFunc):
         prob = (num_cols / self.acceleration - num_low_frequencies) / (
             num_cols - num_low_frequencies
         )
-        accel_mask = self.rng.uniform(size=num_cols) < prob
+        accel_mask = np.random.uniform(size=num_cols) < prob
 
         return accel_mask
 
@@ -193,9 +178,10 @@ class EquiSpacedMaskFunc(MaskFunc):
     """
     Sample data with equally-spaced k-space lines.
 
-    The lines are spaced exactly evenly, as is done in standard GRAPPA-style
-    acquisitions. This means that with a densely-sampled center,
-    ``acceleration`` will be greater than the true acceleration rate.
+    Unlike FastMRI in this class, we modify it more make sense:
+        1. Correcting that ``acceleration`` is greater than the true 
+        acceleration rate due to the densely-sampled center.
+        2. Adds a random offset to the sampling start position.
     """
 
     def calculate_acceleration_mask(
@@ -205,7 +191,7 @@ class EquiSpacedMaskFunc(MaskFunc):
         num_low_frequencies: int,
     ) -> np.ndarray:
         """
-        Produce mask for non-central acceleration lines.
+        Produce a mask for non-central acceleration lines.
 
         Args:
             num_cols: Number of columns of k-space (2D subsampling).
@@ -221,20 +207,24 @@ class EquiSpacedMaskFunc(MaskFunc):
         if (1 - self.center_fraction * self.acceleration) <= 0:
             return np.zeros(num_cols, dtype=np.float32)
 
+        # We set the real (corrected) acceleration as `A`, `c` as self.center_fraction, `a` as self.acceleration,
+        # the number we expect to sample as `n`, and the total phase encoding number as `N`.
+        # Then, N/n = A, N/((n * (1 - c)) + N * c) = a.
+        # Therefore, A = (a * (1 - c)) / (1 - a * c).
         acceleration = round((1 - self.center_fraction) * self.acceleration
                              / (1 - self.center_fraction * self.acceleration))
 
+        # set random offset
         if offset is None:
-            offset = self.rng.randint(0, high=acceleration)
+            offset = np.random.randint(0, high=acceleration)
 
         accel_mask = np.zeros(num_cols, dtype=np.float32)
         accel_mask[offset::acceleration] = 1
 
         return accel_mask
 
-def apply_mask(data: torch.Tensor,
+def apply_mask(data: np.ndarray,
                mask_func: MaskFunc,
-               direction: str = 'PE',
                seed = None):
     mask, num_low_frequencies = mask_func(data.shape, seed=seed)
     masked_data = data * mask + 0.0  # the + 0.0 removes the sign of the zeros

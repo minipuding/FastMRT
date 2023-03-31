@@ -11,18 +11,18 @@ from cli import FastmrtCLI
 from typing import NamedTuple
 import copy
 import thop
+from torchvision.transforms import Compose
 
 from fastmrt.data.dataset import SliceDataset
 from fastmrt.data.mask import RandomMaskFunc, EquiSpacedMaskFunc, apply_mask
 from fastmrt.data.transforms import (
-    UNetDataTransform,
+    FastmrtDataTransform2D,
     CasNetDataTransform,
     RFTNetDataTransform,
     KDNetDataTransform,
-    ComposeTransform,
 )
 from fastmrt.data.prf import PrfHeader, PrfFunc
-from fastmrt.data.augs import AugsCollateFunction
+from fastmrt.data.augs import AugsCollateFunction, ComplexAugs
 from fastmrt.modules.data_module import FastmrtDataModule
 from fastmrt.modules.unet_module import UNetModule
 from fastmrt.modules.cunet_module import CUNetModule
@@ -109,42 +109,46 @@ def run_runet(args):
         TE=args.te,
     ))
 
+    # Obtain Augs Function
+    complex_augs = ComplexAugs(union=args.union,
+                               objs=args.objs,
+                               ap_logic=args.ap_logic,
+                               augs_list=args.augs_list,
+                               compose_num=args.compose_num)
+
     # Obtain Transforms
     project_name = "AUGS"
     dataset_type = "2D"
     root = args.data_dir
-    train_transform = UNetDataTransform(mask_func=mask_func,
-                                        prf_func=prf_func,
-                                        data_format=args.data_format,
-                                        use_random_seed=True,
-                                        fftshift_dim=(-2, -1))
-    val_transform = UNetDataTransform(mask_func=mask_func,
-                                      prf_func=prf_func,
-                                      data_format=args.data_format,
-                                      use_random_seed=False,
-                                      fftshift_dim=(-2, -1))
+    train_transform = FastmrtDataTransform2D(
+        mask_func=mask_func,
+        prf_func=prf_func,
+        aug_func=complex_augs,
+        data_format=args.data_format,
+        use_random_seed=True,
+        fftshift_dim=(-2, -1)
+    )
+    val_transform = FastmrtDataTransform2D(
+        mask_func=mask_func,
+        prf_func=prf_func,
+        aug_func=None,
+        data_format=args.data_format,
+        use_random_seed=False,
+        fftshift_dim=(-2, -1)
+    )
 
-    # define augs
-    collate_fn = AugsCollateFunction(transforms=train_transform,
-                                     ap_shuffle=args.ap_shuffle,
-                                     union=args.union,
-                                     objs=args.objs,
-                                     ap_logic=args.ap_logic,
-                                     augs_list=args.augs_list,
-                                     compose_num=args.compose_num
-                                     )
     if args.stage == 'pre-train':
         project_name = "PRETRAIN_RUNET"
         dataset_type = "PT"
         root = args.pt_data_dir
-        train_transform = ComposeTransform([
+        train_transform = Compose([
             FastmrtPretrainTransform(simufocus_type=args.sf_type,
                                      use_random_seed=True,
                                      frame_num=args.sf_frame_num,
                                      cooling_time_rate=args.sf_cooling_time_rate,
                                      max_delta_temp=args.sf_max_delta_temp,
                                      ), train_transform])
-        val_transform = ComposeTransform([
+        val_transform = Compose([
             FastmrtPretrainTransform(simufocus_type=args.sf_type,
                                      use_random_seed=True,
                                      frame_num=args.sf_frame_num,
@@ -159,8 +163,7 @@ def run_runet(args):
                                     val_transform=val_transform,
                                     test_transform=val_transform,
                                     batch_size=args.batch_size,
-                                    dataset_type=dataset_type,
-                                    collate_fn=collate_fn)
+                                    dataset_type=dataset_type)
 
     # Create RUnet Module
     # args.lr *= gpus_num
@@ -204,8 +207,6 @@ def run_runet(args):
         "leakyrelu_slope": args.leakyrelu_slope,
         "last_layer_with_act": args.last_layer_with_act,
         "lr": args.lr,
-        "lr_step_size": args.lr_step_size,
-        "lr_gamma": args.lr_gamma,
         "weight_decay": args.weight_decay,
         "max_epochs": args.max_epochs,
         "augs-ap_shuffle": args.ap_shuffle,
@@ -252,12 +253,12 @@ def run_cunet(args):
         project_name = "CUNET"
         dataset_type = "2D"
         root = args.data_dir
-        train_transform = UNetDataTransform(mask_func=mask_func,
+        train_transform = FastmrtDataTransform2D(mask_func=mask_func,
                                             prf_func=prf_func,
                                             data_format=args.data_format,
                                             use_random_seed=True,
                                             fftshift_dim=(-2, -1))
-        val_transform = UNetDataTransform(mask_func=mask_func,
+        val_transform = FastmrtDataTransform2D(mask_func=mask_func,
                                             prf_func=prf_func,
                                             data_format=args.data_format,
                                             use_random_seed=False,
@@ -370,8 +371,7 @@ def run_cunet(args):
     # Create Traner
     strategy = 'ddp' if gpus_num > 1 else None
 
-    trainer = pl.Trainer(accelerator='gpu',
-                        devices="auto",
+    trainer = pl.Trainer(gpus=args.gpus,
                         strategy=strategy,
                         enable_progress_bar=False,
                         max_epochs=args.max_epochs,
@@ -402,12 +402,12 @@ def run_resunet(args):
     project_name = "RESUNET"
     dataset_type = "2D"
     root = args.data_dir
-    train_transform = UNetDataTransform(mask_func=mask_func,
+    train_transform = FastmrtDataTransform2D(mask_func=mask_func,
                                         prf_func=prf_func,
                                         data_format=args.data_format,
                                         use_random_seed=True,
                                         fftshift_dim=(-2, -1))
-    val_transform = UNetDataTransform(mask_func=mask_func,
+    val_transform = FastmrtDataTransform2D(mask_func=mask_func,
                                       prf_func=prf_func,
                                       data_format=args.data_format,
                                       use_random_seed=False,
@@ -426,14 +426,14 @@ def run_resunet(args):
         project_name = "PRETRAIN"
         dataset_type = "PT"
         root = args.pt_data_dir
-        train_transform = ComposeTransform([
+        train_transform = Compose([
             FastmrtPretrainTransform(simufocus_type=args.sf_type,
                                      use_random_seed=True,
                                      frame_num=args.sf_frame_num,
                                      cooling_time_rate=args.sf_cooling_time_rate,
                                      max_delta_temp=args.sf_max_delta_temp,
                                      ), train_transform])
-        val_transform = ComposeTransform([
+        val_transform = Compose([
             FastmrtPretrainTransform(simufocus_type=args.sf_type,
                                      use_random_seed=True,
                                      frame_num=args.sf_frame_num,
@@ -541,12 +541,12 @@ def run_swtnet(args):
     project_name = "SWTNET"
     dataset_type = "2D"
     root = args.data_dir
-    train_transform = UNetDataTransform(mask_func=mask_func,
+    train_transform = FastmrtDataTransform2D(mask_func=mask_func,
                                         prf_func=prf_func,
                                         data_format=args.data_format,
                                         use_random_seed=True,
                                         fftshift_dim=(-2, -1))
-    val_transform = UNetDataTransform(mask_func=mask_func,
+    val_transform = FastmrtDataTransform2D(mask_func=mask_func,
                                       prf_func=prf_func,
                                       data_format=args.data_format,
                                       use_random_seed=False,
@@ -565,14 +565,14 @@ def run_swtnet(args):
         project_name = "PRETRAIN"
         dataset_type = "PT"
         root = args.pt_data_dir
-        train_transform = ComposeTransform([
+        train_transform = Compose([
             FastmrtPretrainTransform(simufocus_type=args.sf_type,
                                      use_random_seed=True,
                                      frame_num=args.sf_frame_num,
                                      cooling_time_rate=args.sf_cooling_time_rate,
                                      max_delta_temp=args.sf_max_delta_temp,
                                      ), train_transform])
-        val_transform = ComposeTransform([
+        val_transform = Compose([
             FastmrtPretrainTransform(simufocus_type=args.sf_type,
                                      use_random_seed=True,
                                      frame_num=args.sf_frame_num,
@@ -681,10 +681,31 @@ def run_casnet(args):
         TE=args.te,
     ))
 
-    # Obtain Transforms
-    train_transform = CasNetDataTransform(mask_func, data_format=args.data_format)
-    val_transform = CasNetDataTransform(mask_func, data_format=args.data_format, use_random_seed=False)
+    # Obtain Augs Function
+    complex_augs = ComplexAugs(union=args.union,
+                               objs=args.objs,
+                               ap_logic=args.ap_logic,
+                               augs_list=args.augs_list,
+                               compose_num=args.compose_num)
 
+    # Obtain Transforms
+    train_transform = FastmrtDataTransform2D(
+        mask_func=mask_func,
+        prf_func=prf_func,
+        aug_func=complex_augs,
+        data_format=args.data_format,
+        use_random_seed=True,
+        fftshift_dim=(-2, -1)
+    )
+    val_transform = FastmrtDataTransform2D(
+        mask_func=mask_func,
+        prf_func=prf_func,
+        aug_func=None,
+        data_format=args.data_format,
+        use_random_seed=False,
+        fftshift_dim=(-2, -1)
+    )
+    
     # Create Data Module
     data_module = FastmrtDataModule(root=args.data_dir,
                                     train_transform=train_transform,
@@ -876,14 +897,14 @@ def run_kdnet(args):
         project_name = "PRETRAIN_RUNET"
         dataset_type = "PT"
         root = args.pt_data_dir
-        train_transform = ComposeTransform([
+        train_transform = Compose([
             FastmrtPretrainTransform(simufocus_type=args.sf_type,
                                      use_random_seed=True,
                                      frame_num=args.sf_frame_num,
                                      cooling_time_rate=args.sf_cooling_time_rate,
                                      max_delta_temp=args.sf_max_delta_temp,
                                      ), train_transform])
-        val_transform = ComposeTransform([
+        val_transform = Compose([
             FastmrtPretrainTransform(simufocus_type=args.sf_type,
                                      use_random_seed=True,
                                      frame_num=args.sf_frame_num,

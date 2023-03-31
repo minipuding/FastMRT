@@ -1,10 +1,11 @@
 import torch
+import numpy as np
 from typing import Union, Tuple
 
 
 def normalize_paras(
-    data: torch.Tensor
-) -> Tuple[torch.Tensor, torch.Tensor]:
+    data: Union[torch.Tensor, np.ndarray]
+) -> Tuple:
     """
     Normalize the given tensor  with instance norm/
 
@@ -18,14 +19,14 @@ def normalize_paras(
     Returns:
         torch.Tensor: Normalized tensor
     """
-    mean = torch.mean(data)
-    std = torch.std(data)
+    mean = data.mean()
+    std = data.std()
 
     return mean, std
 
 
 def normalize_apply(
-        data: torch.Tensor,
+        data: Union[torch.Tensor, np.ndarray],
         mean: Union[float, torch.Tensor],
         std: Union[float, torch.Tensor],
         eps: Union[float, torch.Tensor] = 0.0
@@ -42,9 +43,9 @@ def normalize_apply(
 
 
 def denormalize(
-        data: torch.Tensor,
+        data: Union[torch.Tensor, np.ndarray],
         mean: Union[torch.Tensor, float],
         std: Union[torch.Tensor, float],
-) -> torch.Tensor:
+) -> Union[float, torch.Tensor]:
 
     return (data * std) + mean

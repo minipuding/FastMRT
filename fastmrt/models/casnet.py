@@ -31,33 +31,32 @@ class CasNet(nn.Module):
         self.leakyrelu_slope = leakyrelu_slope
 
         self.res_blocks = nn.ModuleList(
-            # self.res_block_num * [ResBlock(in_channels=self.in_channels,
-            #                                out_channels=self.out_channels,
-            #                                base_channels=self.base_channels,
-            #                                res_conv_ksize=self.res_conv_ksize,
-            #                                res_conv_num=self.res_conv_num,
-            #                                drop_prob=self.drop_prob,
-            #                                leakyrelu_slope=self.leakyrelu_slope)]
-            self.res_block_num * [Unet(in_channels=self.in_channels,
-                                       out_channels=self.out_channels,
-                                       base_channels=self.base_channels,
-                                       level_num=4,
-                                       drop_prob=self.drop_prob,
-                                       leakyrelu_slope=self.leakyrelu_slope)]
+            [ResBlock(in_channels=self.in_channels,
+                        out_channels=self.out_channels,
+                        base_channels=self.base_channels,
+                        res_conv_ksize=self.res_conv_ksize,
+                        res_conv_num=self.res_conv_num,
+                        drop_prob=self.drop_prob,
+                        leakyrelu_slope=self.leakyrelu_slope) for _ in range(self.res_block_num)]
+            # [Unet(in_channels=self.in_channels,
+            #         out_channels=self.out_channels,
+            #         base_channels=self.base_channels,
+            #         level_num=4,
+            #         drop_prob=self.drop_prob,
+            #         leakyrelu_slope=self.leakyrelu_slope) for _ in range(self.res_block_num)]
         )
         self.dc_blocks = nn.ModuleList(
-            self.res_block_num * [DCBlock()]
+            [DCBlock() for _ in range(self.res_block_num)]
         )
 
-    def forward(self, input, origin_shape, mask):
+    def forward(self, input, mean: float=0., std: float=1., mask: torch.Tensor=torch.ones(1, 96)):
         outputs = []
         temp = input
         for res_block, dc_block in zip(self.res_blocks, self.dc_blocks):
-            # mean, std = normalize_paras(temp)
-            # output = normalize_apply(temp, mean, std)
             output = res_block(temp)
-            # output = denormalize(output, mean, std)
-            temp = dc_block((output + temp) / 2, input, origin_shape, mask)
+            output = denormalize((output + temp) / 2, mean, std)
+            output = dc_block(output, input, mask)
+            temp = normalize_apply(output, mean, std)
             outputs += [temp]
         return outputs[-1]
 
@@ -168,7 +167,7 @@ class DCBlock(nn.Module):
     ):
         super(DCBlock, self).__init__()
 
-    def forward(self, output, origin_input, origin_shape, mask, dc_weight=1):
+    def forward(self, output, origin_input, mask, dc_weight=1):
         output_kspace = fft2c_tensor(real_tensor_to_complex_tensor(output))
         origin_input_kspace = fft2c_tensor(real_tensor_to_complex_tensor(origin_input))
         dc_kspace = dc_weight * (origin_input_kspace - mask * output_kspace) + output_kspace

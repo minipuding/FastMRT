@@ -2,7 +2,7 @@ import os.path
 
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, Sampler
-from fastmrt.data.dataset import SliceDataset, VolumeDataset
+from fastmrt.data.dataset import SliceDataset
 from fastmrt.pretrain.mri_data import SliceDataset as pt_SliceDataset
 from fastmrt.pretrain.imagenet_data import ImagenetDataset as pt_ImagenetDataset
 from pathlib import Path
@@ -66,8 +66,6 @@ class FastmrtDataModule(pl.LightningDataModule):
         # load dataset
         if self.dataset_type == '2D':
             dataset = SliceDataset(root=data_path, transform=transform)
-        elif self.dataset_type == '3D':
-            dataset = VolumeDataset(root=data_path, transform=transform)
         elif self.dataset_type == 'PT':
             # dataset = pt_SliceDataset(root=data_path, challenge="singlecoil", transform=transform)
             dataset = pt_ImagenetDataset(root=data_path, transform=transform)

@@ -53,7 +53,7 @@ class CUNetModule(BaseModule):
                           )
 
     def training_step(self, batch):
-        train_loss = self._decoupled_loss(batch)
+        train_loss = self._l1_loss(batch)
         return {"loss": train_loss}
 
     def validation_step(self, batch, batch_idx):

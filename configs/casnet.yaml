@@ -20,7 +20,7 @@ MODEL:
   LR: 1e-3                    # Variable Param 14
   LR_STEP_SIZE: 40            # Variable Param 15
   LR_GAMMA: 0.1               # Variable Param 16
-  WEIGHT_DECAY: 1e-7          # Variable Param 17
+  WEIGHT_DECAY: 0          # Variable Param 17
   MAX_EPOCHS: 150             # Independent Param
 LOG:
   LOG_NAME: 'casnet_unet4_wo.resize_only1output_lr1e-3_bs32'     # Independent Param

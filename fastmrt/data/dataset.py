@@ -10,13 +10,11 @@ import torch
 from typing import (
     Callable,
     Optional,
-    Tuple,
     Union,
 )
 from pathlib import Path
 import os
 import h5py
-import fastmrt.utils.trans as tool
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -33,11 +31,10 @@ class Dataset(torch.utils.data.Dataset):
         Args:
             root: Paths to the datasets.
         """
-        # self.transform = transform
-        # self.num_coils = num_coils
         self.data = []
 
         # load 5-D complex64 .h5 dataset
+        # [frames, slice, coils, height, width]
         file_names = os.listdir(root)
         for file_name in file_names:
             header, kspace, tmap_masks = self._load_data(os.path.join(root, file_name))
@@ -73,9 +70,9 @@ class SliceDataset(Dataset):
             root: Paths to the datasets.
             transforms: Optional; A sequence of callable objects that
                 preprocesses the raw data into appropriate form.
-                The transform function should take 'kspace', xxx as  inputs.
+                The transform function should take 'kspace', 'kspace_ref', 'tmap_mask' and `metadata` as inputs.
             ref_idx: int; Index of reference slice for calculating
-                temperature maps (Tmap), default is 0.
+                temperature maps (TMap), default is 0.
         """
         super(SliceDataset, self).__init__(root)
         self.transform = transform
@@ -89,13 +86,12 @@ class SliceDataset(Dataset):
                     for frame_idx in range(int(header['frames'])):
                         slice_kspace = np.squeeze(kspace[frame_idx, slice_idx, coil_idx, :, :])     # load current frame
                         slice_kspace_ref = np.squeeze(kspace[ref_idx, slice_idx, coil_idx, :, :])   # load reference frame
+                        metainfo = dict(file_name=file_name, frame_idx=frame_idx, 
+                                        slice_idx=slice_idx, coil_idx=coil_idx)
                         self.slice_data += [{"kspace": slice_kspace,
                                              "kspace_ref": slice_kspace_ref,
                                              "tmap_mask": tmap_mask,
-                                             "file_name": file_name,
-                                             "frame_idx": frame_idx,
-                                             "slice_idx": slice_idx,
-                                             "coil_idx": coil_idx,}]
+                                             "metainfo": metainfo}]
 
     def __getitem__(self, idx : int):
         if self.transform is None:
@@ -106,30 +102,48 @@ class SliceDataset(Dataset):
     def __len__(self):
         return len(self.slice_data)
 
+
 class VolumeDataset(Dataset):
     """
         A pytorch Dataset that provides access to MR Thermomery image volumes.
         We disassemble all datasets into three-dimensional volumes, regardless of time series relationships.
+        Note that we can transfer volume to image domain by 2d-ifft to each slice of volume rather than 3d-ifft.
+
+        Args:
+            root: paths to the datasets.
+            transforms: optional; A sequence of callable objects that
+                preprocesses the raw data into appropriate form.
+                The transform function should take 'kspace', xxx as  inputs.
+            ref_idx: int; index of reference slice for calculating
+                temperature maps (TMap), default is 0.
     """
     def __init__(
         self,
         root : Union[str, Path, os.PathLike],
         transform : Optional[Callable] = None,
+        ref_idx: int = 0
     ):
         super(VolumeDataset, self).__init__(root)
         self.transform = transform
         self.volume_data = []
 
         # load volume kspace as dataset
-        for header, kspace in self.data:
+        for header, kspace, tmap_mask, file_name in self.data:
             for frame_idx in range(int(header['frames'])):
                 for coil_idx in range(int(header['coils'])):
                     volume_kspace = np.squeeze(kspace[frame_idx, :, coil_idx, :, :])
-                    volume = self.transform(volume_kspace)
-                    self.volume_data += [volume]
+                    volume_kspace_ref = np.squeeze(kspace[ref_idx, :, coil_idx, :, :])
+                    metainfo = dict(file_name=file_name, frame_idx=frame_idx, coil_idx=coil_idx)
+                    self.volume_data += [{"volume_kspace": volume_kspace,
+                                          "volume_kspace_ref": volume_kspace_ref,
+                                          "tmap_mask": tmap_mask,
+                                          "metainfo": metainfo}]
 
     def __getitem__(self, idx : int):
-        return self.volume_data[idx]
+        if self.transform is None:
+            return self.volume_data[idx]
+        else:
+            return self.transform(self.volume_data[idx])
 
     def __len__(self):
         return len(self.volume_data)
