@@ -1,12 +1,11 @@
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
-from fastmrt.models.cunet import Unet
+from fastmrt.models.cunet import ComplexUnet
 from fastmrt.modules.base_module import BaseModule
 from fastmrt.utils.normalize import denormalize
 from fastmrt.data.prf import PrfFunc
 from fastmrt.utils.trans import complex_tensor_to_real_tensor as ct2rt
-import pdb
 
 
 class CUNetModule(BaseModule):
@@ -43,14 +42,15 @@ class CUNetModule(BaseModule):
         self.last_layer_with_act = last_layer_with_act
         self.lr = lr
         self.weight_decay = weight_decay
-        self.model = Unet(in_channels=self.in_channels,
-                          out_channels=self.out_channels,
-                          base_channels=self.base_channels,
-                          level_num=self.level_num,
-                          drop_prob=self.drop_prob,
-                          leakyrelu_slope=self.leakyrelu_slope,
-                          last_layer_with_act=self.last_layer_with_act,
-                          )
+        self.model = ComplexUnet(
+            in_channels=self.in_channels,
+            out_channels=self.out_channels,
+            base_channels=self.base_channels,
+            level_num=self.level_num,
+            drop_prob=self.drop_prob,
+            leakyrelu_slope=self.leakyrelu_slope,
+            last_layer_with_act=self.last_layer_with_act,
+        )
 
     def training_step(self, batch):
         train_loss = self._l1_loss(batch)

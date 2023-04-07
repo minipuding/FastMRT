@@ -17,9 +17,7 @@ class CasNetModule(BaseModule):
         res_conv_num: int = 5,
         drop_prob: float = 0.0,
         leakyrelu_slope = 0.4,
-        lr: float = 1e-3,
-        lr_step_size: int = 40,
-        lr_gamma: float = 0.1,
+        lr: float = 5e-4,
         weight_decay: float = 0.0,
         tmap_prf_func: PrfFunc = None,
         tmap_patch_rate: int = 4,
@@ -43,8 +41,6 @@ class CasNetModule(BaseModule):
         self.drop_prob = drop_prob
         self.leakyrelu_slope = leakyrelu_slope
         self.lr = lr
-        self.lr_step_size = lr_step_size
-        self.lr_gamma = lr_gamma
         self.weight_decay = weight_decay
         self.model = CasNet(in_channels=self.in_channels,
                             out_channels=self.out_channels,
@@ -67,7 +63,7 @@ class CasNetModule(BaseModule):
         mean = batch.mean.unsqueeze(1).unsqueeze(2).unsqueeze(3)
         std = batch.std.unsqueeze(1).unsqueeze(2).unsqueeze(3)
         output = self.model(batch.input, mean, std, batch.mask)
-        output_ref = self.model(batch.input_ref, batch.mask)
+        output_ref = self.model(batch.input_ref, mean, std, batch.mask)
         val_loss = F.l1_loss(output, batch.label)
         return {
             "input": denormalize(batch.input, mean, std),

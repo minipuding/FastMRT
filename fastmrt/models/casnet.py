@@ -4,21 +4,36 @@ from torch import nn
 import torch.nn.functional as F
 from fastmrt.utils.fftc import fft2c_tensor, ifft2c_tensor
 from fastmrt.utils.trans import real_tensor_to_complex_tensor, complex_tensor_to_real_tensor
-from fastmrt.utils.normalize import normalize_apply, denormalize, normalize_paras
+from fastmrt.utils.normalize import normalize_apply, denormalize
 from fastmrt.models.runet import Unet
 
 class CasNet(nn.Module):
+    """
+    Casnet is a classical MR reconstruction network as follows:
+        CNN - DC - CNN - DC ... CNN - DC
+    DC stands for data consistency. We use res-block CNNs here.
+    
+    Args:
+        in_channels: int, the input channel, 2 for real type images.
+        out_channels: int, the output channels are the same as `in_channels`.
+        base_channels: int, the res-conv block channels, default is 32.
+        res_block_num: int, the number of res-blocks, default is 5.
+        res_conv_ksize: int, the conv kernel size in res-blocks, default is 3.
+        res_conv_num: int, the number of res-conv layers in a res-block, default is 5.
+        drop_prob: float, dropout probability applied in each conv and trans conv block.
+        leakyrelu_slope: float, the slope of the leaky ReLU.
+    """
 
     def __init__(
         self,
         in_channels: int = 2,
         out_channels: int = 2,
-        base_channels: int = 24,
+        base_channels: int = 32,
         res_block_num: int = 5,
         res_conv_ksize: int = 3,
         res_conv_num: int = 5,
         drop_prob: float = 0.0,
-        leakyrelu_slope: float = 0.4,
+        leakyrelu_slope: float = 0.1,
     ):
         super(CasNet, self).__init__()
         self.in_channels = in_channels
@@ -38,12 +53,6 @@ class CasNet(nn.Module):
                         res_conv_num=self.res_conv_num,
                         drop_prob=self.drop_prob,
                         leakyrelu_slope=self.leakyrelu_slope) for _ in range(self.res_block_num)]
-            # [Unet(in_channels=self.in_channels,
-            #         out_channels=self.out_channels,
-            #         base_channels=self.base_channels,
-            #         level_num=4,
-            #         drop_prob=self.drop_prob,
-            #         leakyrelu_slope=self.leakyrelu_slope) for _ in range(self.res_block_num)]
         )
         self.dc_blocks = nn.ModuleList(
             [DCBlock() for _ in range(self.res_block_num)]
@@ -52,10 +61,11 @@ class CasNet(nn.Module):
     def forward(self, input, mean: float=0., std: float=1., mask: torch.Tensor=torch.ones(1, 96)):
         outputs = []
         temp = input
+        identity = denormalize(input, mean, std)
         for res_block, dc_block in zip(self.res_blocks, self.dc_blocks):
             output = res_block(temp)
             output = denormalize((output + temp) / 2, mean, std)
-            output = dc_block(output, input, mask)
+            output = dc_block(output, identity, mask)
             temp = normalize_apply(output, mean, std)
             outputs += [temp]
         return outputs[-1]
@@ -96,6 +106,15 @@ class ResBlock(nn.Module):
 
 
 class ResConv(nn.Module):
+    """
+    Res-Block with two convolution layers.
+
+    Args:
+        channels: int, input and output channels.
+        kernel_size: int, convolution kernel size, default is 3.
+        drop_prob: float, dropout probability applied in each conv and trans conv block.
+        leakyrelu_slope: float, the slope of the leaky ReLU.
+    """
 
     def __init__(
             self,
@@ -120,9 +139,6 @@ class ResConv(nn.Module):
             nn.LeakyReLU(negative_slope=self.leakyrelu_slope, inplace=False),
             nn.Dropout2d(self.drop_prob),
         )
-        # nn.init.kaiming_normal_(self.conv.weight)
-        # nn.init.constant_(self.bn.weight, val=0.5)
-        # nn.init.zeros_(self.bn.bias)
 
     def forward(self, input: torch.Tensor):
         output = self.res_block(input)
@@ -130,6 +146,17 @@ class ResConv(nn.Module):
 
 
 class ConvBlock(nn.Module):
+    """
+    This block contains one convolutional layer with batch normalization and ReLU activation.
+
+    Args:
+        in_channels: int, the number of input channels. For real images, this is 2.
+        out_channels: int, the number of output channels, which is the same as `in_channels`.
+        drop_prob: float, the probability of dropout applied in each convolutional and transposed convolutional block.
+        leakyrelu_slope: float, the slope of the leaky ReLU activation function.
+        with_act: bool, whether to use activation layers.
+    """
+
 
     def __init__(
         self,
@@ -153,25 +180,33 @@ class ConvBlock(nn.Module):
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         output = self.conv(input)
-        output = self.bn(output)
         if self.with_act is True:
+            output = self.bn(output)
             output = self.act(output)
         output = self.drop(output)
         return output
 
 
 class DCBlock(nn.Module):
+    """
+    Data consistency block.
+
+    Args:
+        output: the output of the CNN.
+        origin_input: the original input image.
+        mask: the down-sampling mask.
+    """
 
     def __init__(
             self,
     ):
         super(DCBlock, self).__init__()
 
-    def forward(self, output, origin_input, mask, dc_weight=1):
+    def forward(self, output, origin_input, mask):
         output_kspace = fft2c_tensor(real_tensor_to_complex_tensor(output))
         origin_input_kspace = fft2c_tensor(real_tensor_to_complex_tensor(origin_input))
-        dc_kspace = dc_weight * (origin_input_kspace - mask * output_kspace) + output_kspace
-
+        # dc_kspace = dc_weight * (origin_input_kspace - mask * output_kspace) + output_kspace
+        dc_kspace = origin_input_kspace * mask + output_kspace * (1 - mask)
         return complex_tensor_to_real_tensor(ifft2c_tensor(dc_kspace))
 
     def _pad(self, kspace, size):

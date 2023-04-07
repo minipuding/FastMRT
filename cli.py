@@ -354,6 +354,7 @@ class FastmrtCLI:
         data_cfg = config["DATA"]
         model_cfg = config["MODEL"]
         log_cfg = config["LOG"]
+        augs_cfg = config["AUGS"]
 
         # dataset configs
         parser.add_argument('--data_format', type=str, default=data_cfg["DATA_FORMAT"],
@@ -368,11 +369,6 @@ class FastmrtCLI:
                             help="(int request) acceleration of fastMRT")
         parser.add_argument('--center_fraction', type=float, default=data_cfg["CENTER_FRACTION"],
                             help="(float request) center fraction of mask")
-        parser.add_argument('--resize_size', type=tuple, default=data_cfg["RESIZE_SIZE"],
-                            help="(tuple optional) Resize size of input image, default is (256, 256)")
-        parser.add_argument('--resize_mode', type=str, default=data_cfg["RESIZE_MODE"],
-                            help="(str optional) Resize mode is one of ``on_image`` and ``on_kspace``,"
-                                 "default is ``on_kspace``")
         # model configs
         parser.add_argument('--in_channels', type=int, default=model_cfg["IN_CHANNELS"],
                             help="(int optional) Input channels of unet model, default is 2")
@@ -393,10 +389,6 @@ class FastmrtCLI:
                             help="(float, optional) leaky relu slope, default is 0.4")
         parser.add_argument('--lr', type=float, default=model_cfg["LR"],
                             help="(float, optional) Learning rate, default is 1e-3")
-        parser.add_argument('--lr_step_size', type=int, default=model_cfg["LR_STEP_SIZE"],
-                            help="(int optional) Learning rate step size, default is 40")
-        parser.add_argument('--lr_gamma', type=float, default=model_cfg["LR_GAMMA"],
-                            help="(float optional) Learning rate gamma decay, default is 0.1")
         parser.add_argument('--weight_decay', type=float, default=model_cfg["WEIGHT_DECAY"],
                             help="(float optional) Parameter for penalizing weights norm. Defaults is 0.0")
         parser.add_argument('--max_epochs', type=float, default=model_cfg["MAX_EPOCHS"],
@@ -417,7 +409,17 @@ class FastmrtCLI:
         parser.add_argument('--tmap_ablation_thresh', type=int, default=log_cfg["TMAP_ABLATION_THRESH"],
                             help="(int optional) When temperature is over ``TMAP_ABLATION_THRESH``,"
                                  " we regard the issue is ablated, default is 57(℃)")
-
+        # augs
+        parser.add_argument('--union', type=bool, default=augs_cfg["UNION"],
+                            help="")
+        parser.add_argument('--objs', type=str, default=augs_cfg["OBJS"], nargs='+',
+                            help="")
+        parser.add_argument('--ap_logic', type=str, default=augs_cfg["AP_LOGIC"],
+                            help="")
+        parser.add_argument('--augs_list', type=str, default=augs_cfg["AUGS_LIST"], nargs='+',
+                            help="")
+        parser.add_argument('--compose_num', type=int, default=augs_cfg["COMPOSE_NUM"],
+                            help="")
         return parser
 
     @staticmethod

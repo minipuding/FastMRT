@@ -16,7 +16,6 @@ from torch.nn import ConvTranspose2d
 from .complexFunctions import complex_relu, complex_max_pool2d, complex_avg_pool2d
 from .complexFunctions import complex_dropout, complex_dropout2d
 from .complexFunctions import complex_sigmoid, complex_tanh, complex_opposite
-import pdb
 
 
 def apply_complex(fr, fi, input, dtype=torch.complex64):

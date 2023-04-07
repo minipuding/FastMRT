@@ -29,7 +29,6 @@ from fastmrt.modules.cunet_module import CUNetModule
 from fastmrt.modules.resunet_module import ResUNetModule
 from fastmrt.modules.swtnet_module import SwtNetModule
 from fastmrt.modules.casnet_module import CasNetModule
-from fastmrt.modules.rftnet_module import RFTNetModule
 from fastmrt.modules.kdnet_module import KDNetModule
 from fastmrt.models.runet import Unet
 from fastmrt.models.resunet import UNet as ResUNet
@@ -723,8 +722,6 @@ def run_casnet(args):
                                  drop_prob=args.drop_prob,
                                  leakyrelu_slope=args.leakyrelu_slope,
                                  lr=args.lr,
-                                 lr_step_size=args.lr_step_size,
-                                 lr_gamma=args.lr_gamma,
                                  weight_decay=args.weight_decay,
                                  tmap_prf_func=prf_func,
                                  tmap_patch_rate=args.tmap_patch_rate,
@@ -751,8 +748,6 @@ def run_casnet(args):
         "drop_prob": args.drop_prob,
         "leakyrelu_slope": args.leakyrelu_slope,
         "lr": args.lr,
-        "lr_step_size": args.lr_step_size,
-        "lr_gamma": args.lr_gamma,
         "weight_decay": args.weight_decay,
         "max_epochs": args.max_epochs,
     }
@@ -766,85 +761,6 @@ def run_casnet(args):
 
     # Start Training
     trainer.fit(casnet_module, datamodule=data_module)
-
-def run_rftnet(args):
-    # Obtain Mask Function
-    if args.sampling_mode == "RANDOM":
-        mask_func = RandomMaskFunc(center_fraction=args.center_fraction,
-                                   acceleration=args.acceleration)
-    elif args.sampling_mode == "EQUISPACED":
-        mask_func = EquiSpacedMaskFunc(center_fraction=args.center_fraction,
-                                       acceleration=args.acceleration)
-    # Obtain PRF Function
-    prf_func = PrfFunc(prf_header=PrfHeader(
-        B0=args.b0,
-        gamma=args.gamma,
-        alpha=args.alpha,
-        TE=args.te,
-    ))
-
-    # Obtain Transforms
-    train_transform = RFTNetDataTransform(mask_func, data_format=args.data_format)
-    val_transform = RFTNetDataTransform(mask_func, data_format=args.data_format, use_random_seed=False)
-
-    # Create Data Module
-    data_module = FastmrtDataModule(root=args.data_dir,
-                                    train_transform=train_transform,
-                                    val_transform=val_transform,
-                                    test_transform=val_transform,
-                                    batch_size=args.batch_size)
-
-    # Create RUnet Module
-    rft_module = RFTNetModule(in_channels=args.in_channels,
-                              out_channels=args.out_channels,
-                              base_channels=args.base_channels,
-                              level_num=args.level_num,
-                              drop_prob=args.drop_prob,
-                              leakyrelu_slope=args.leakyrelu_slope,
-                              last_layer_with_act=args.last_layer_with_act,
-                              lr=args.lr,
-                              lr_step_size=args.lr_step_size,
-                              lr_gamma=args.lr_gamma,
-                              weight_decay=args.weight_decay,
-                              tmap_prf_func=prf_func,
-                              tmap_patch_rate=args.tmap_patch_rate,
-                              tmap_max_temp_thresh=args.tmap_max_temp_thresh,
-                              tmap_ablation_thresh=args.tmap_ablation_thresh,
-                              log_images_frame_idx=args.log_images_frame_idx,
-                              log_images_freq=args.log_images_freq)
-
-    # Create Logger & Add Hparams
-    logger = loggers.WandbLogger(save_dir=args.log_dir, name=args.log_name, project="RFTNET")
-    hparams = {
-        "net": args.net,
-        "batch_size": args.batch_size,
-        "sampling_mode": args.sampling_mode,
-        "acceleration": args.acceleration,
-        "center_fraction": args.center_fraction,
-        "resize_size": args.resize_size,
-        "resize_mode": args.resize_mode,
-
-        "base_channels": args.base_channels,
-        "level_num": args.level_num,
-        "drop_prob": args.drop_prob,
-        "leakyrelu_slope": args.leakyrelu_slope,
-        "last_layer_with_act": args.last_layer_with_act,
-        "lr": args.lr,
-        "lr_step_size": args.lr_step_size,
-        "lr_gamma": args.lr_gamma,
-        "weight_decay": args.weight_decay,
-        "max_epochs": args.max_epochs,
-    }
-    logger.log_hyperparams(hparams)
-
-    # Create Traner
-    trainer = pl.Trainer(gpus=[0],
-                         enable_progress_bar=False,
-                         max_epochs=args.max_epochs,
-                         logger=logger)
-
-    # Start Training
-    trainer.fit(rft_module, datamodule=data_module)
 
 def run_kdnet(args):
     gpus_num = len(args.gpus)
@@ -1022,8 +938,6 @@ def run(args):
         run_swtnet(args)
     elif args.net == 'casnet':
         run_casnet(args)
-    elif args.net == 'rftnet':
-        run_rftnet(args)
     elif args.net == 'kdnet':
         run_kdnet(args)
     else:
