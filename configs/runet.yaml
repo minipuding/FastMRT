@@ -21,10 +21,10 @@ DIRECT:
   LOG:
     LOG_NAME: "exp0322-0|l1-loss_union=True|bc=32"  # Baseline
     LOG_IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
-    LOG_IMAGES_FREQ: 50         # Independent Param
+    LOG_IMAGES_FREQ: 2         # Independent Param
     TMAP_PATCH_RATE: 4          # Independent Param
     TMAP_MAX_TEMP_THRESH: 45    # Independent Param
-    TMAP_ABLATION_THRESH: 43    # Independent Param
+    TMAP_HEATED_THRESH: 43    # Independent Param
   AUGS:
     AP_SHUFFLE: False
     UNION: True
@@ -61,7 +61,7 @@ PRETRAIN:
     LOG_IMAGES_FREQ: 50         # Independent Param
     TMAP_PATCH_RATE: 4          # Independent Param
     TMAP_MAX_TEMP_THRESH: 45    # Independent Param
-    TMAP_ABLATION_THRESH: 43    # Independent Param
+    TMAP_HEATED_THRESH: 43    # Independent Param
   SF:
     SF_TYPE: "gaussian"
     SF_FRAME_NUM: 11

@@ -112,8 +112,8 @@ class FastmrtCLI:
         parser.add_argument('--tmap_max_temp_thresh', type=int, default=log_cfg["TMAP_MAX_TEMP_THRESH"],
                             help="(int optional) When max temperature of tmap patch is over ``tmap_max_temp_thresh``,"
                                  " we recode the max temperature error, default is 45(℃)")
-        parser.add_argument('--tmap_ablation_thresh', type=int, default=log_cfg["TMAP_ABLATION_THRESH"],
-                            help="(int optional) When temperature is over ``TMAP_ABLATION_THRESH``,"
+        parser.add_argument('--tmap_heated_thresh', type=int, default=log_cfg["TMAP_HEATED_THRESH"],
+                            help="(int optional) When temperature is over ``TMAP_HEATED_THRESH``,"
                                  " we regard the issue is ablated, default is 57(℃)")
         # augs config
         parser.add_argument('--ap_shuffle', type=bool, default=augs_cfg["AP_SHUFFLE"],
@@ -214,8 +214,8 @@ class FastmrtCLI:
         parser.add_argument('--tmap_max_temp_thresh', type=int, default=log_cfg["TMAP_MAX_TEMP_THRESH"],
                             help="(int optional) When max temperature of tmap patch is over ``tmap_max_temp_thresh``,"
                                  " we recode the max temperature error, default is 45(℃)")
-        parser.add_argument('--tmap_ablation_thresh', type=int, default=log_cfg["TMAP_ABLATION_THRESH"],
-                            help="(int optional) When temperature is over ``TMAP_ABLATION_THRESH``,"
+        parser.add_argument('--tmap_heated_thresh', type=int, default=log_cfg["TMAP_HEATED_THRESH"],
+                            help="(int optional) When temperature is over ``TMAP_HEATED_THRESH``,"
                                  " we regard the issue is ablated, default is 57(℃)")
         # augs config
         parser.add_argument('--ap_shuffle', type=bool, default=augs_cfg["AP_SHUFFLE"],
@@ -316,8 +316,8 @@ class FastmrtCLI:
         parser.add_argument('--tmap_max_temp_thresh', type=int, default=log_cfg["TMAP_MAX_TEMP_THRESH"],
                             help="(int optional) When max temperature of tmap patch is over ``tmap_max_temp_thresh``,"
                                  " we recode the max temperature error, default is 45(℃)")
-        parser.add_argument('--tmap_ablation_thresh', type=int, default=log_cfg["TMAP_ABLATION_THRESH"],
-                            help="(int optional) When temperature is over ``TMAP_ABLATION_THRESH``,"
+        parser.add_argument('--tmap_heated_thresh', type=int, default=log_cfg["TMAP_HEATED_THRESH"],
+                            help="(int optional) When temperature is over ``TMAP_HEATED_THRESH``,"
                                  " we regard the issue is ablated, default is 57(℃)")
         # augs config
         parser.add_argument('--ap_shuffle', type=bool, default=augs_cfg["AP_SHUFFLE"],
@@ -406,8 +406,8 @@ class FastmrtCLI:
         parser.add_argument('--tmap_max_temp_thresh', type=int, default=log_cfg["TMAP_MAX_TEMP_THRESH"],
                             help="(int optional) When max temperature of tmap patch is over ``tmap_max_temp_thresh``,"
                                  " we recode the max temperature error, default is 45(℃)")
-        parser.add_argument('--tmap_ablation_thresh', type=int, default=log_cfg["TMAP_ABLATION_THRESH"],
-                            help="(int optional) When temperature is over ``TMAP_ABLATION_THRESH``,"
+        parser.add_argument('--tmap_heated_thresh', type=int, default=log_cfg["TMAP_HEATED_THRESH"],
+                            help="(int optional) When temperature is over ``TMAP_HEATED_THRESH``,"
                                  " we regard the issue is ablated, default is 57(℃)")
         # augs
         parser.add_argument('--union', type=bool, default=augs_cfg["UNION"],
@@ -491,8 +491,8 @@ class FastmrtCLI:
         parser.add_argument('--tmap_max_temp_thresh', type=int, default=log_cfg["TMAP_MAX_TEMP_THRESH"],
                             help="(int optional) When max temperature of tmap patch is over ``tmap_max_temp_thresh``,"
                                  " we recode the max temperature error, default is 45(℃)")
-        parser.add_argument('--tmap_ablation_thresh', type=int, default=log_cfg["TMAP_ABLATION_THRESH"],
-                            help="(int optional) When temperature is over ``TMAP_ABLATION_THRESH``,"
+        parser.add_argument('--tmap_heated_thresh', type=int, default=log_cfg["TMAP_HEATED_THRESH"],
+                            help="(int optional) When temperature is over ``TMAP_HEATED_THRESH``,"
                                  " we regard the issue is ablated, default is 57(℃)")
 
         return parser
@@ -578,8 +578,8 @@ class FastmrtCLI:
         parser.add_argument('--tmap_max_temp_thresh', type=int, default=log_cfg["TMAP_MAX_TEMP_THRESH"],
                             help="(int optional) When max temperature of tmap patch is over ``tmap_max_temp_thresh``,"
                                  " we recode the max temperature error, default is 45(℃)")
-        parser.add_argument('--tmap_ablation_thresh', type=int, default=log_cfg["TMAP_ABLATION_THRESH"],
-                            help="(int optional) When temperature is over ``TMAP_ABLATION_THRESH``,"
+        parser.add_argument('--tmap_heated_thresh', type=int, default=log_cfg["TMAP_HEATED_THRESH"],
+                            help="(int optional) When temperature is over ``TMAP_HEATED_THRESH``,"
                                  " we regard the issue is ablated, default is 57(℃)")
         # augs config
         parser.add_argument('--ap_shuffle', type=bool, default=augs_cfg["AP_SHUFFLE"],
@@ -679,8 +679,8 @@ class FastmrtCLI:
         parser.add_argument('--tmap_max_temp_thresh', type=int, default=log_cfg["TMAP_MAX_TEMP_THRESH"],
                             help="(int optional) When max temperature of tmap patch is over ``tmap_max_temp_thresh``,"
                                  " we recode the max temperature error, default is 45(℃)")
-        parser.add_argument('--tmap_ablation_thresh', type=int, default=log_cfg["TMAP_ABLATION_THRESH"],
-                            help="(int optional) When temperature is over ``TMAP_ABLATION_THRESH``,"
+        parser.add_argument('--tmap_heated_thresh', type=int, default=log_cfg["TMAP_HEATED_THRESH"],
+                            help="(int optional) When temperature is over ``TMAP_HEATED_THRESH``,"
                                  " we regard the issue is ablated, default is 57(℃)")
         # augs config
         parser.add_argument('--ap_shuffle', type=bool, default=augs_cfg["AP_SHUFFLE"],

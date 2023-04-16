@@ -29,7 +29,7 @@ DIRECT:
     LOG_IMAGES_FREQ: 50         # Independent Param
     TMAP_PATCH_RATE: 4          # Independent Param
     TMAP_MAX_TEMP_THRESH: 45    # Independent Param
-    TMAP_ABLATION_THRESH: 43    # Independent Param
+    TMAP_HEATED_THRESH: 43    # Independent Param
   AUGS:
     AP_SHUFFLE: False
     UNION: False
@@ -66,7 +66,7 @@ PRETRAIN:
     LOG_IMAGES_FREQ: 50         # Independent Param
     TMAP_PATCH_RATE: 4          # Independent Param
     TMAP_MAX_TEMP_THRESH: 45    # Independent Param
-    TMAP_ABLATION_THRESH: 43    # Independent Param
+    TMAP_HEATED_THRESH: 43    # Independent Param
   SF:
     SF_TYPE: "gaussian"
     SF_FRAME_NUM: 11

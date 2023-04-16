@@ -1,6 +1,5 @@
 from pyparsing import col
 import torch
-torch.multiprocessing.set_sharing_strategy('file_system')
 import torch.nn.functional as F
 import numpy as np
 import pytorch_lightning as pl
@@ -8,30 +7,27 @@ from pytorch_lightning import loggers
 from argparse import ArgumentParser
 import yaml
 from cli import FastmrtCLI
-from typing import NamedTuple
-import copy
 import thop
 from torchvision.transforms import Compose
 
-from fastmrt.data.dataset import SliceDataset
 from fastmrt.data.mask import RandomMaskFunc, EquiSpacedMaskFunc, apply_mask
 from fastmrt.data.transforms import (
     FastmrtDataTransform2D,
-    CasNetDataTransform,
-    RFTNetDataTransform,
     KDNetDataTransform,
 )
 from fastmrt.data.prf import PrfHeader, PrfFunc
 from fastmrt.data.augs import AugsCollateFunction, ComplexAugs
 from fastmrt.modules.data_module import FastmrtDataModule
-from fastmrt.modules.unet_module import UNetModule
-from fastmrt.modules.cunet_module import CUNetModule
-from fastmrt.modules.resunet_module import ResUNetModule
-from fastmrt.modules.swtnet_module import SwtNetModule
-from fastmrt.modules.casnet_module import CasNetModule
+from fastmrt.modules.model_module import (
+    UNetModule, 
+    CUNetModule, 
+    ResUNetModule,
+    CasNetModule,
+    SwtNetModule
+)
+# from fastmrt.modules.swtnet_module import SwtNetModule
 from fastmrt.modules.kdnet_module import KDNetModule
 from fastmrt.models.runet import Unet
-from fastmrt.models.resunet import UNet as ResUNet
 from fastmrt.pretrain.transforms import FastmrtPretrainTransform
 
 # build args
@@ -171,14 +167,11 @@ def run_runet(args):
                              base_channels=args.base_channels,
                              level_num=args.level_num,
                              drop_prob=args.drop_prob,
-                             leakyrelu_slope=args.leakyrelu_slope,
-                             last_layer_with_act=args.last_layer_with_act,
                              lr=args.lr,
                              weight_decay=args.weight_decay,
                              tmap_prf_func=prf_func,
                              tmap_patch_rate=args.tmap_patch_rate,
-                             tmap_max_temp_thresh=args.tmap_max_temp_thresh,
-                             tmap_ablation_thresh=args.tmap_ablation_thresh,
+                             tmap_heated_thresh=args.tmap_heated_thresh,
                              log_images_frame_idx=args.log_images_frame_idx,
                              log_images_freq=args.log_images_freq)
 
@@ -252,16 +245,22 @@ def run_cunet(args):
         project_name = "CUNET"
         dataset_type = "2D"
         root = args.data_dir
-        train_transform = FastmrtDataTransform2D(mask_func=mask_func,
-                                            prf_func=prf_func,
-                                            data_format=args.data_format,
-                                            use_random_seed=True,
-                                            fftshift_dim=(-2, -1))
-        val_transform = FastmrtDataTransform2D(mask_func=mask_func,
-                                            prf_func=prf_func,
-                                            data_format=args.data_format,
-                                            use_random_seed=False,
-                                            fftshift_dim=(-2, -1))
+        train_transform = FastmrtDataTransform2D(
+            aug_func=None,
+            mask_func=mask_func,
+            prf_func=prf_func,
+            data_format=args.data_format,
+            use_random_seed=True,
+            fftshift_dim=(-2, -1)
+        )
+        val_transform = FastmrtDataTransform2D(
+            aug_func=None,
+            mask_func=mask_func,
+            prf_func=prf_func,
+            data_format=args.data_format,
+            use_random_seed=False,
+            fftshift_dim=(-2, -1)
+        )
     elif args.stage == 'pre-train':
         project_name = "PRETRAIN_CUNET"
         dataset_type = "PT"
@@ -323,14 +322,11 @@ def run_cunet(args):
                                 base_channels=args.base_channels,
                                 level_num=args.level_num,
                                 drop_prob=args.drop_prob,
-                                leakyrelu_slope=args.leakyrelu_slope,
-                                last_layer_with_act=args.last_layer_with_act,
                                 lr=args.lr,
                                 weight_decay=args.weight_decay,
                                 tmap_prf_func=prf_func,
                                 tmap_patch_rate=args.tmap_patch_rate,
-                                tmap_max_temp_thresh=args.tmap_max_temp_thresh,
-                                tmap_ablation_thresh=args.tmap_ablation_thresh,
+                                tmap_heated_thresh=args.tmap_heated_thresh,
                                 log_images_frame_idx=args.log_images_frame_idx,
                                 log_images_freq=args.log_images_freq)
 
@@ -401,26 +397,23 @@ def run_resunet(args):
     project_name = "RESUNET"
     dataset_type = "2D"
     root = args.data_dir
-    train_transform = FastmrtDataTransform2D(mask_func=mask_func,
-                                        prf_func=prf_func,
-                                        data_format=args.data_format,
-                                        use_random_seed=True,
-                                        fftshift_dim=(-2, -1))
-    val_transform = FastmrtDataTransform2D(mask_func=mask_func,
-                                      prf_func=prf_func,
-                                      data_format=args.data_format,
-                                      use_random_seed=False,
-                                      fftshift_dim=(-2, -1))
+    train_transform = FastmrtDataTransform2D(
+            aug_func=None,
+            mask_func=mask_func,
+            prf_func=prf_func,
+            data_format=args.data_format,
+            use_random_seed=True,
+            fftshift_dim=(-2, -1)
+        )
+    val_transform = FastmrtDataTransform2D(
+        aug_func=None,
+        mask_func=mask_func,
+        prf_func=prf_func,
+        data_format=args.data_format,
+        use_random_seed=False,
+        fftshift_dim=(-2, -1)
+    )
 
-    # define augs
-    collate_fn = AugsCollateFunction(transforms=train_transform,
-                                     ap_shuffle=args.ap_shuffle,
-                                     union=args.union,
-                                     objs=args.objs,
-                                     ap_logic=args.ap_logic,
-                                     augs_list=args.augs_list,
-                                     compose_num=args.compose_num
-                                     )
     if args.stage == 'pre-train':
         project_name = "PRETRAIN"
         dataset_type = "PT"
@@ -448,7 +441,6 @@ def run_resunet(args):
                                     test_transform=val_transform,
                                     batch_size=args.batch_size,
                                     dataset_type=dataset_type,
-                                    collate_fn=collate_fn,
                                     generator=args.generator,
                                     work_init_fn=args.work_init_fn)
 
@@ -465,8 +457,7 @@ def run_resunet(args):
                                    weight_decay=args.weight_decay,
                                    tmap_prf_func=prf_func,
                                    tmap_patch_rate=args.tmap_patch_rate,
-                                   tmap_max_temp_thresh=args.tmap_max_temp_thresh,
-                                   tmap_ablation_thresh=args.tmap_ablation_thresh,
+                                   tmap_heated_thresh=args.tmap_heated_thresh,
                                    log_images_frame_idx=args.log_images_frame_idx,
                                    log_images_freq=args.log_images_freq)
 
@@ -508,8 +499,7 @@ def run_resunet(args):
     # Create Traner
     strategy = 'ddp' if gpus_num > 1 else None
 
-    trainer = pl.Trainer(accelerator='gpu',
-                         devices="auto",
+    trainer = pl.Trainer(gpus=args.gpus,
                          strategy=strategy,
                          enable_progress_bar=False,
                          max_epochs=args.max_epochs,
@@ -540,16 +530,20 @@ def run_swtnet(args):
     project_name = "SWTNET"
     dataset_type = "2D"
     root = args.data_dir
-    train_transform = FastmrtDataTransform2D(mask_func=mask_func,
-                                        prf_func=prf_func,
-                                        data_format=args.data_format,
-                                        use_random_seed=True,
-                                        fftshift_dim=(-2, -1))
-    val_transform = FastmrtDataTransform2D(mask_func=mask_func,
-                                      prf_func=prf_func,
-                                      data_format=args.data_format,
-                                      use_random_seed=False,
-                                      fftshift_dim=(-2, -1))
+    train_transform = FastmrtDataTransform2D(
+        mask_func=mask_func,
+        aug_func=None,
+        prf_func=prf_func,
+        data_format=args.data_format,
+        use_random_seed=True,
+        fftshift_dim=(-2, -1))
+    val_transform = FastmrtDataTransform2D(
+        mask_func=mask_func,
+        aug_func=None,
+        prf_func=prf_func,
+        data_format=args.data_format,
+        use_random_seed=False,
+        fftshift_dim=(-2, -1))
 
     # define augs
     collate_fn = AugsCollateFunction(transforms=train_transform,
@@ -607,8 +601,7 @@ def run_swtnet(args):
                                  weight_decay=args.weight_decay,
                                  tmap_prf_func=prf_func,
                                  tmap_patch_rate=args.tmap_patch_rate,
-                                 tmap_max_temp_thresh=args.tmap_max_temp_thresh,
-                                 tmap_ablation_thresh=args.tmap_ablation_thresh,
+                                 tmap_heated_thresh=args.tmap_heated_thresh,
                                  log_images_frame_idx=args.log_images_frame_idx,
                                  log_images_freq=args.log_images_freq)
 
@@ -725,8 +718,7 @@ def run_casnet(args):
                                  weight_decay=args.weight_decay,
                                  tmap_prf_func=prf_func,
                                  tmap_patch_rate=args.tmap_patch_rate,
-                                 tmap_max_temp_thresh=args.tmap_max_temp_thresh,
-                                 tmap_ablation_thresh=args.tmap_ablation_thresh,
+                                 tmap_heated_thresh=args.tmap_heated_thresh,
                                  log_images_frame_idx=args.log_images_frame_idx,
                                  log_images_freq=args.log_images_freq)
 
@@ -866,7 +858,7 @@ def run_kdnet(args):
                                tmap_prf_func=prf_func,
                                tmap_patch_rate=args.tmap_patch_rate,
                                tmap_max_temp_thresh=args.tmap_max_temp_thresh,
-                               tmap_ablation_thresh=args.tmap_ablation_thresh,
+                               tmap_heated_thresh=args.tmap_heated_thresh,
                                log_images_frame_idx=args.log_images_frame_idx,
                                log_images_freq=args.log_images_freq)
 

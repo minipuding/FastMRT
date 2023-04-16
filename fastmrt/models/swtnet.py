@@ -1,5 +1,4 @@
 '''
-# -----------------------------------------
 Network
 SwinMR m.1.3
 by Jiahao Huang (j.huang21@imperial.ac.uk)
@@ -7,7 +6,6 @@ by Jiahao Huang (j.huang21@imperial.ac.uk)
 Thanks:
 https://github.com/JingyunLiang/SwinIR
 https://github.com/microsoft/Swin-Transformer
-# -----------------------------------------
 '''
 
 import math

@@ -1,4 +1,4 @@
-from typing import Dict, NamedTuple, Union, Tuple, List
+from typing import Dict, NamedTuple, Union, Tuple, List, Callable
 import torch
 from fastmrt.data.mask import MaskFunc, apply_mask
 from fastmrt.data.prf import PrfFunc
@@ -32,45 +32,6 @@ class FastmrtSample(NamedTuple):
     metainfo: Dict
 
 
-class CasNetSample(NamedTuple):
-    # For training
-    input: torch.Tensor
-    label: torch.Tensor
-    phs_scale: torch.Tensor
-    # For temperature map
-    input_ref: torch.Tensor
-    label_ref: torch.Tensor
-    tmap_mask: torch.Tensor
-    # For restore
-    mask: torch.Tensor
-    # mean: Union[float, torch.Tensor]
-    # std: Union[float, torch.Tensor]
-    origin_shape: Tuple[int]
-    # For namer
-    file_name: str
-    frame_idx: int
-    slice_idx: int
-    coil_idx: int
-
-
-class RFTNetSample(NamedTuple):
-    # For training
-    input: torch.Tensor
-    label_phs: torch.Tensor
-    label_ref: torch.Tensor
-    label_img: torch.Tensor
-    phs_scale: torch.Tensor
-    # For temperature map
-    tmap_mask: torch.Tensor
-    # For restore
-    mask: torch.Tensor
-    # For namer
-    file_name: str
-    frame_idx: int
-    slice_idx: int
-    coil_idx: int
-
-
 class KDNetSample(NamedTuple):
     # For training
     input_tea: torch.Tensor
@@ -97,7 +58,7 @@ class FastmrtDataTransform2D:
         self,
         mask_func: MaskFunc,
         prf_func: PrfFunc,
-        aug_func: None,
+        aug_func: Callable=None,
         data_format: str = 'CF',
         use_augs: bool=True,
         use_random_seed: bool = True,
@@ -147,8 +108,8 @@ class FastmrtDataTransform2D:
             self._apply_normalize([image, image_ref, label, label_ref])
 
         # to tensor
-        [image, image_ref, label, label_ref, tmap_mask, mean, std] = \
-            self._to_tensor([image, image_ref, label, label_ref, tmap_mask, np.array(mean), np.array(std)])
+        [image, image_ref, label, label_ref, tmap_mask, mask, mean, std] = \
+            self._to_tensor([image, image_ref, label, label_ref, tmap_mask, mask, np.array(mean), np.array(std)])
         tmap_mask = tmap_mask if use_tmap_mask else torch.ones(image.shape)
 
         return FastmrtSample(
@@ -221,8 +182,8 @@ class FastmrtDataTransform2D:
             image_ref: the reference image after data format transform.
         """
         if self.data_format == 'CF':    # Complex Float
-            image = image.unsqueeze(0)
-            image_ref = image_ref.unsqueeze(0)
+            image = np.expand_dims(image, axis=0)
+            image_ref = np.expand_dims(image_ref, axis=0)
         elif self.data_format == 'RF':  # Real Float
             image = cn2rn(image, mode='CHW')
             image_ref = cn2rn(image_ref, mode='CHW')
@@ -269,197 +230,6 @@ class FastmrtDataTransform2D:
 
     def _generate_seed(self):
         return np.random.randint(2 ** 32 - 1)
-
-
-class CasNetDataTransform:
-    """
-    Data Transformer for training CasNet model.
-    """
-
-    def __init__(
-            self,
-            mask_func: MaskFunc,
-            prf_func: PrfFunc = None,
-            data_format: str = 'RF',
-            use_random_seed: bool = True,
-            fftshift_dim: Union[int, Tuple[int, int]] = (-2, -1),
-    ):
-        """
-
-        :param mask_func:
-        """
-        self.mask_func = mask_func
-        self.prf_func = prf_func
-        self.data_format = data_format
-        self.use_random_seed = use_random_seed
-        self.fftshift_dim = fftshift_dim
-
-    def __call__(
-            self,
-            data: Dict
-    ) -> CasNetSample:
-
-        # to tensor
-        kspace_torch = torch.from_numpy(data["kspace"])
-        kspace_torch_ref = torch.from_numpy(data["kspace_ref"])
-        tmap_mask_torch = torch.from_numpy(data["tmap_mask"])
-
-        # apply mask
-        tag = f"{data['file_name']}_f{data['frame_idx']}s{data['slice_idx']}c{'coil_idx'}"
-        seed = None if self.use_random_seed is True else tuple(map(ord, tag))
-        mask_kspace, mask, _ = apply_mask(kspace_torch, self.mask_func, seed=seed)
-        mask_kspace_ref = kspace_torch_ref * mask
-
-        # apply resize by padding on kspace
-        # mask_kspace = resize_on_kspace(mask_kspace, self.resize_size)
-        # full_kspace = resize_on_kspace(kspace_torch, self.resize_size)
-        # mask_kspace_ref = resize_on_kspace(mask_kspace_ref, self.resize_size)
-        # full_kspace_ref = resize_on_kspace(kspace_torch_ref, self.resize_size)
-
-        # apply inverse Fourier transform
-        mask_image = ifft2c_tensor(mask_kspace, self.fftshift_dim)
-        full_image = ifft2c_tensor(kspace_torch, self.fftshift_dim)
-        mask_image_ref = ifft2c_tensor(mask_kspace_ref, self.fftshift_dim)
-        full_image_ref = ifft2c_tensor(kspace_torch_ref, self.fftshift_dim)
-
-        # apply data format transform
-        if self.data_format == 'CF':  # Complex Float
-            input = mask_image
-            label = full_image
-            input_ref = mask_image_ref
-            label_ref = full_image_ref
-        elif self.data_format == 'RF':  # Real Float
-            input = complex_tensor_to_real_tensor(mask_image, mode='CHW')
-            label = complex_tensor_to_real_tensor(full_image, mode='CHW')
-            input_ref = complex_tensor_to_real_tensor(mask_image_ref, mode='CHW')
-            label_ref = complex_tensor_to_real_tensor(full_image_ref, mode='CHW')
-        else:
-            raise ValueError("``data_format`` must be one of ``CF``(Complex Float), ``RF``(Real Float),"
-                             " ``TM``(Temperature Map) and ``AP``(Amplitude & Phase),"
-                             " but ``{}`` was got.".format(self.data_format))
-
-        # apply normalization
-        # mean, std = normalize_paras(input)
-        # input = normalize_apply(input, mean, std, eps=1e-12)
-        # label = normalize_apply(label, mean, std, eps=1e-12)
-        # input_ref = normalize_apply(input_ref, mean, std, eps=1e-12)
-        # label_ref = normalize_apply(label_ref, mean, std, eps=1e-12)
-
-        # temperature map mask
-        # tmap_mask = resize(tmap_mask_torch, self.resize_size, mode="nearest")
-        tmap_mask = tmap_mask_torch
-
-        return CasNetSample(
-            input=input,
-            label=label,
-            input_ref=input_ref,
-            label_ref=label_ref,
-            mask=mask,
-            origin_shape=kspace_torch.shape,
-            tmap_mask=tmap_mask,
-            file_name=data["file_name"],
-            frame_idx=data["frame_idx"],
-            slice_idx=data["slice_idx"],
-            coil_idx=data["coil_idx"],
-        )
-
-
-class RFTNetDataTransform:
-    """
-    Data Transformer for training U-Net model.
-    """
-
-    def __init__(
-            self,
-            mask_func: MaskFunc,
-            prf_func: PrfFunc = None,
-            data_format: str = 'CF',
-            use_random_seed: bool = True,
-            fftshift_dim: Union[int, Tuple[int, int]] = (-2, -1),
-    ):
-        """
-
-        :param mask_func:
-        """
-        self.mask_func = mask_func
-        self.prf_func = prf_func
-        self.data_format = data_format
-        self.use_random_seed = use_random_seed
-        self.fftshift_dim = fftshift_dim
-
-    def __call__(
-            self,
-            data: Dict
-    ) -> RFTNetSample:
-
-        # to tensor
-        kspace_torch = torch.from_numpy(data["kspace"])
-        kspace_torch_ref = torch.from_numpy(data["kspace_ref"])
-        tmap_mask_torch = torch.from_numpy(data["tmap_mask"])
-
-        # apply mask
-        tag = f"{data['file_name']}_f{data['frame_idx']}s{data['slice_idx']}c{'coil_idx'}"
-        seed = None if self.use_random_seed is True else tuple(map(ord, tag))
-        mask_kspace, mask, _ = apply_mask(kspace_torch, self.mask_func, seed=seed)
-
-        # apply inverse Fourier transform & resize
-        if self.resize_mode == 'on_image':
-            # mask kspace
-            mask_image = ifft2c_tensor(mask_kspace, self.fftshift_dim)
-            mask_image = resize_on_image(mask_image, self.resize_size)
-            # full image
-            full_image = ifft2c_tensor(kspace_torch, self.fftshift_dim)
-            full_image = resize_on_image(full_image, self.resize_size)
-            # full image reference
-            full_image_ref = ifft2c_tensor(kspace_torch_ref, self.fftshift_dim)
-            full_image_ref = resize_on_image(full_image_ref, self.resize_size)
-
-        elif self.resize_mode == 'on_kspace':
-            # mask kspace
-            mask_kspace = resize_on_kspace(mask_kspace, self.resize_size)
-            mask_image = ifft2c_tensor(mask_kspace, self.fftshift_dim)
-            # full image
-            full_kspace = resize_on_kspace(kspace_torch, self.resize_size)
-            full_image = ifft2c_tensor(full_kspace, self.fftshift_dim)
-            # full image reference
-            full_kspace_ref = resize_on_kspace(kspace_torch_ref, self.resize_size)
-            full_image_ref = ifft2c_tensor(full_kspace_ref, self.fftshift_dim)
-        else:
-            raise ValueError('``resize_type`` must be one of the ``on_image`` and ``on_kspace``, '
-                             'but ``{}`` was got.'.format(self.resize_size))
-
-        # apply data format transform
-        if self.data_format == 'CF':  # Complex Float
-            input = mask_image
-            label_img = full_image
-            label_ref = full_image_ref
-        elif self.data_format == 'RF':  # Real Float
-            input = complex_tensor_to_real_tensor(mask_image, mode='CHW')
-            label_img = complex_tensor_to_real_tensor(full_image, mode='CHW')
-            label_ref = complex_tensor_to_real_tensor(full_image_ref, mode='CHW')
-        else:
-            raise ValueError("``data_format`` must be one of ``CF``(Complex Float), ``RF``(Real Float),"
-                             " ``TM``(Temperature Map) and ``AP``(Amplitude & Phase),"
-                             " but ``{}`` was got.".format(self.data_format))
-
-        # apply delta phase
-        label_phs = complex_tensor_to_real_tensor(full_image * torch.conj(full_image_ref))
-
-        # temperature map mask
-        tmap_mask = resize(tmap_mask_torch, self.resize_size, mode="nearest")
-
-        return RFTNetSample(
-            input=input,
-            label_phs=label_phs,
-            label_ref=label_ref,
-            label_img=label_img,
-            mask=mask,
-            tmap_mask=tmap_mask,
-            file_name=data["file_name"],
-            frame_idx=data["frame_idx"],
-            slice_idx=data["slice_idx"],
-            coil_idx=data["coil_idx"],
-        )
 
 
 class KDNetDataTransform:

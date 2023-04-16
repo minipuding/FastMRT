@@ -1,5 +1,5 @@
 """
-Copyright (c) Sijie Xu with email:sijie.x@sjtu.edu.cn.
+Copyright (c) Sijie Xu with email: sijie.x@foxmail.com.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.

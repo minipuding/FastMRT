@@ -60,13 +60,14 @@ class CasNet(nn.Module):
 
     def forward(self, input, mean: float=0., std: float=1., mask: torch.Tensor=torch.ones(1, 96)):
         outputs = []
+        # mask = mask.to(input.device)
         temp = input
-        identity = denormalize(input, mean, std)
+        # identity = denormalize(input, mean, std)
         for res_block, dc_block in zip(self.res_blocks, self.dc_blocks):
             output = res_block(temp)
-            output = denormalize((output + temp) / 2, mean, std)
-            output = dc_block(output, identity, mask)
-            temp = normalize_apply(output, mean, std)
+            # output = denormalize((output + temp) / 2, mean, std)
+            temp = dc_block((output + temp) / 2, input, mask)
+            # temp = normalize_apply(output, mean, std)
             outputs += [temp]
         return outputs[-1]
 
@@ -205,7 +206,6 @@ class DCBlock(nn.Module):
     def forward(self, output, origin_input, mask):
         output_kspace = fft2c_tensor(real_tensor_to_complex_tensor(output))
         origin_input_kspace = fft2c_tensor(real_tensor_to_complex_tensor(origin_input))
-        # dc_kspace = dc_weight * (origin_input_kspace - mask * output_kspace) + output_kspace
         dc_kspace = origin_input_kspace * mask + output_kspace * (1 - mask)
         return complex_tensor_to_real_tensor(ifft2c_tensor(dc_kspace))
 
