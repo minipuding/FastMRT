@@ -1,8 +1,8 @@
 import contextlib
 import numpy as np
 import random
+import os
 import torch
-import albumentations as A
 from typing import Union, Optional, Tuple
 
 
@@ -29,3 +29,18 @@ def temp_seed(seed: Optional[Union[int, Tuple[int, ...]]]):
             random.setstate(rd_state)
     else:
         yield
+
+def randomness(seed: int):
+    """
+    Try to control the randomness of the program.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+    # os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ":4096:8"
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    # torch.use_deterministic_algorithms(True)

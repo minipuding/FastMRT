@@ -1,43 +1,34 @@
 # r-unet超参数配置文件
-PUBLIC:
-  DATA_FORMAT: 'RF'           # Fixed Param
-  BATCH_SIZE: 8               # Variable Param 01 recommend 16
-  SAMPLING_MODE: 'EQUISPACED'     # Variable Param 02
-  IN_CHANNELS: 2              # Fixed Param
-  OUT_CHANNELS: 2             # Fixed Param
-  MAX_EPOCHS: 200             # Independent Param
-  USE_EMA: False
-  SOFT_LABEL_WEIGHT: 1
-DATA_TEA:
-  ACCELERATION: 4             # Variable Param 03
-  CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
-DATA_STU:
-  ACCELERATION: 4             # Variable Param 03
-  CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
-MODEL_TEA:
-  BASE_CHANNELS: 128           # Variable Param 07 recommend 32
-  LEVEL_NUM: 4                # Variable Param 08 recommend 4
-  LAST_LAYER_WITH_ACT: False  # Variable Param 11 几乎无影响
-  MODEL_DIR: "/home/sxu/SJTU/FastMRT/fastMRT/Codes/logs/AUGS/30ycyzjc/checkpoints/epoch=199-step=101400.ckpt"
-MODEL_STU:
-  BASE_CHANNELS: 32           # Variable Param 07 recommend 32
-  LEVEL_NUM: 4                # Variable Param 08 recommend 4
-  DROP_PROB: 0.0              # Variable Param 09 毫无影响
-  LEAKYRELU_SLOPE: 0.1        # Variable Param 10 recommend 0.1
-  LAST_LAYER_WITH_ACT: False  # Variable Param 11 几乎无影响
-  LR: 5e-4                    # Variable Param 12 recommend 1e-3
-  WEIGHT_DECAY: 1e-4          # Variable Param 15 recommend 1e-4
+
+DATA:
+  FORMAT: 'RF'       
+  BATCH_SIZE: 8               
+  SAMPLING_MODE: 'EQUISPACED' 
+  ACCELERATION: 4             
+  CENTER_FRACTION: 0.15       
+MODEL:
+  IN_CHANNELS: 2              
+  OUT_CHANNELS: 2             
+  BASE_CHANNELS_STU: 32           
+  BASE_CHANNELS_TEA: 128
+  LEVEL_NUM: 4                
+  DROP_PROB: 0.0              
+  LEAKYRELU_SLOPE: 0.1        
+  LR: 5e-4                    
+  WEIGHT_DECAY: 1e-4          
+  LOSS_TYPE: 'l1'
+  MAX_EPOCHS: 200             
+  TEA_DIR: "/home/sxu/SJTU/FastMRT/fastMRT/Codes/logs/AUGS/30ycyzjc/checkpoints/epoch=199-step=101400.ckpt"
 LOG:
-  LOG_NAME: 'exp0322-2|l1-loss-decay_gamma=0.7_union=True|runet128->runet32'  # Baseline
-  LOG_IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
-  LOG_IMAGES_FREQ: 50         # Independent Param
-  TMAP_PATCH_RATE: 4          # Independent Param
-  TMAP_MAX_TEMP_THRESH: 45    # Independent Param
-  TMAP_HEATED_THRESH: 43    # Independent Param
+  NAME: "exp0322-0|l1-loss_union=True|bc=32"  
+  IMAGES_FRAME_IDX: 5     
+  IMAGES_FREQ: 50         
+  TMAP_PATCH_RATE: 4      
+  TMAP_HEATED_THRESH: 43  
 AUGS:
   AP_SHUFFLE: False
   UNION: True
   OBJS: []
   AP_LOGIC: "and"
-  AUGS_LIST: ["crop", "rotate", "blur", "flip"]
+  LIST: ["crop", "rotate", "blur", "flip"]
   COMPOSE_NUM: 1

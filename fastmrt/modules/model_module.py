@@ -174,7 +174,7 @@ class KDNetModule(FastmrtModule):
         self.model = KDNet(tea_net, stu_net)
 
     def training_step(self, batch, batch_idx):
-        tea_loss, stu_loss, soft_label_loss, kd_loss = self.loss_fn(batch)
+        tea_loss, stu_loss, soft_label_loss, kd_loss = self.loss_fn(*self.model(batch.input), batch.label)
 
         return {"loss": kd_loss,
                 "tea_loss": tea_loss,
@@ -196,35 +196,57 @@ class KDNetModule(FastmrtModule):
         self.log("stu_loss", stu_loss / len(train_logs), on_epoch=True, on_step=False)
         self.log("soft_label_loss", soft_label_loss / len(train_logs), on_epoch=True, on_step=False)
 
-    def _l1_loss(self, batch):
+    def validation_step(self, batch, batch_idx, **kwargs):
+
+        # obtain output and reference frame output
+        output_tea, output = self.model(batch.input, **kwargs)
+        _, output_ref = self.model(batch.input_ref, **kwargs)
+
+        # calculate validation loss
+        _, _, _, val_loss = self.loss_fn(output_tea, output, batch.label)
+
+        # obtain mean and standard diviation for de-normailzation
+        mean = batch.mean.unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        std = batch.std.unsqueeze(1).unsqueeze(2).unsqueeze(3)
+
+        return {
+            "input": self.to_eval(batch.input, mean, std),
+            "label": self.to_eval(batch.label, mean, std),
+            "output": self.to_eval(output, mean, std),
+            "input_ref": self.to_eval(batch.input_ref, mean, std),
+            "label_ref": self.to_eval(batch.label_ref, mean, std),
+            "output_ref": self.to_eval(output_ref, mean, std),
+            "tmap_mask": batch.tmap_mask,
+            "val_loss": val_loss,
+            "file_name": batch.metainfo['file_name'],
+            "frame_idx": batch.metainfo['frame_idx'],
+            "slice_idx": batch.metainfo['slice_idx'],
+            "coil_idx": batch.metainfo['coil_idx'],
+        }
+
+    def _l1_loss(self, tea_output, stu_output, label):
 
         # setting loss weight decay
         gamma = 0.7
-        beta = max((1 - self.current_epoch / self.max_epoch) * gamma, 0)
-
-        # model forward (only forward stu_input)
-        tea_output, stu_output = self.model(batch.input_stu)
+        beta = max((1 - self.current_epoch / self.max_epochs) * gamma, 0)
 
         # calculate losses
-        tea_loss = F.l1_loss(tea_output, batch.label)
-        stu_loss = F.l1_loss(stu_output, batch.label)
+        tea_loss = F.l1_loss(tea_output, label)
+        stu_loss = F.l1_loss(stu_output, label)
         soft_label_loss = F.l1_loss(stu_output, tea_output.clone().detach())
         kd_loss = (1 - beta) *stu_loss + beta * soft_label_loss
 
         return tea_loss, stu_loss, soft_label_loss, kd_loss
 
-    def _decoupled_loss(self, batch):
+    def _decoupled_loss(self, tea_output, stu_output, label):
         # setting loss weight decay
         gamma1, gamma2 = 0.7, 0.7
-        beta1 = max((1 - self.current_epoch / self.max_epoch) * gamma1, 0)
-        beta2 = max((1 - self.current_epoch / self.max_epoch) * gamma2, 0)
-
-        # model forward (only forward stu_input)
-        tea_output, stu_output = self.model(batch.input_stu)
+        beta1 = max((1 - self.current_epoch / self.max_epochs) * gamma1, 0)
+        beta2 = max((1 - self.current_epoch / self.max_epochs) * gamma2, 0)
 
         tea_output_complex = rt2ct(tea_output.clone().detach())
         stu_output_complex = rt2ct(stu_output)
-        label_complex = rt2ct(batch.label)
+        label_complex = rt2ct(label)
 
         # amplitude loss
         stu_amp_loss = F.l1_loss(stu_output_complex.abs(), label_complex.abs())

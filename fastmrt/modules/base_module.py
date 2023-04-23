@@ -364,7 +364,7 @@ class FastmrtModule(BaseModule):
     Args:
         loss_type (str): One of `l1` and `decoupled`.
             Specifies the type of loss function to use.
-        max_epoch (int): The number of training epochs.
+        max_epochs (int): The number of training epochs.
             Defaults to 10.
         lr (float): The learning rate.
             Defaults to 0.001.
@@ -376,7 +376,7 @@ class FastmrtModule(BaseModule):
             self, 
             *args, 
             loss_type: str='l1',
-            max_epoch: int=200,
+            max_epochs: int=200,
             lr: float = 5e-4,
             weight_decay: float = 1e-4,
             **kwargs
@@ -390,7 +390,7 @@ class FastmrtModule(BaseModule):
         else:
             raise ValueError(f"`loss_type` must be one of `l1` and `decoupled`, but {loss_type} was got.")
         
-        self.max_epoch = max_epoch
+        self.max_epochs = max_epochs
         self.lr = lr
         self.weight_decay = weight_decay
 
@@ -467,7 +467,7 @@ class FastmrtModule(BaseModule):
                                       weight_decay=self.weight_decay)
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,
-                                                               T_max=self.max_epoch,
+                                                               T_max=self.max_epochs,
                                                                last_epoch=-1)
         return [optimizer], [scheduler]
 

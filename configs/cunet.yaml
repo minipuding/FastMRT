@@ -1,82 +1,39 @@
 # r-unet超参数配置文件
 
-DIRECT:
-  DATA:
-    DATA_FORMAT: 'CF'           # Fixed Param
-    BATCH_SIZE: 4               # Variable Param 01 recommend 16
-    SAMPLING_MODE: 'EQUISPACED'     # Variable Param 02
-    ACCELERATION: 4             # Variable Param 03
-    CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
-  MODEL:
-    IN_CHANNELS: 1              # Fixed Param
-    OUT_CHANNELS: 1             # Fixed Param
-    BASE_CHANNELS: 16           # Variable Param 07 recommend 32
-    LEVEL_NUM: 4                # Variable Param 08 recommend 4
-    DROP_PROB: 0.0              # Variable Param 09 毫无影响
-    LEAKYRELU_SLOPE: 0.1        # Variable Param 10 recommend 0.1
-    LAST_LAYER_WITH_ACT: False  # Variable Param 11 几乎无影响
-    LR: 5e-4                    # Variable Param 12 recommend 1e-3
-    LR_STEP_SIZE: 40            # Variable Param 13
-    LR_GAMMA: 0.1               # Variable Param 14
-    WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
-    MAX_EPOCHS: 200             # Independent Param
-  LOG:
-    LOG_NAME: 'exp0415-0|debug|bs4'  # Independent Param
-    LOG_IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
-    LOG_IMAGES_FREQ: 50         # Independent Param
-    TMAP_PATCH_RATE: 4          # Independent Param
-    TMAP_MAX_TEMP_THRESH: 45    # Independent Param
-    TMAP_HEATED_THRESH: 43    # Independent Param
-  AUGS:
-    AP_SHUFFLE: False
-    UNION: True
-    OBJS: []
-    AP_LOGIC: "and"
-    AUGS_LIST: ["crop", "rotate", "blur", "flip"]
-    COMPOSE_NUM: 1
-
-PRETRAIN:
-  DATA:
-    DATA_FORMAT: 'RF'           # Fixed Param
-    BATCH_SIZE: 128               # Variable Param 01 recommend 16
-    SAMPLING_MODE: 'EQUISPACED'     # Variable Param 02
-    ACCELERATION: 4             # Variable Param 03
-    CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
-    RESIZE_SIZE: [224, 224]     # Variable Param 05 recommend 256
-    RESIZE_MODE: 'on_kspace'    # Variable Param 06 recommend 'on_kspace'
-  MODEL:
-    IN_CHANNELS: 2              # Fixed Param
-    OUT_CHANNELS: 2             # Fixed Param
-    BASE_CHANNELS: 32           # Variable Param 07 recommend 32
-    LEVEL_NUM: 4                # Variable Param 08 recommend 4
-    DROP_PROB: 0.0              # Variable Param 09 毫无影响
-    LEAKYRELU_SLOPE: 0.1        # Variable Param 10 recommend 0.1
-    LAST_LAYER_WITH_ACT: False  # Variable Param 11 几乎无影响
-    LR: 1e-3                    # Variable Param 12 recommend 1e-3
-    LR_STEP_SIZE: 50            # Variable Param 13
-    LR_GAMMA: 0.1               # Variable Param 14
-    WEIGHT_DECAY: 0             # Variable Param 15 recommend 1e-4
-    MAX_EPOCHS: 300            # Independent Param
-  LOG:
-    LOG_NAME: 'pretrain_runet_imgnet_lr1e-3'  # Independent Param
-    LOG_IMAGES_FRAME_IDX: 8     # Independent Param recommend 3 ~ 7
-    LOG_IMAGES_FREQ: 50         # Independent Param
-    TMAP_PATCH_RATE: 4          # Independent Param
-    TMAP_MAX_TEMP_THRESH: 45    # Independent Param
-    TMAP_HEATED_THRESH: 43    # Independent Param
-  SF:
-    SF_TYPE: "gaussian"
-    SF_FRAME_NUM: 11
-    SF_COOLING_TIME_RATE: 0.2
-    SF_CENTER_CROP_SIZE: 224
-    SF_RANDOM_CROP_SIZE: 96
-    SF_MAX_DELTA_TEMP: 30
-
-FINE_TUNE:
-  MODEL:
-    MODEL_DIR: "./logs/PRETRAIN_RUNET/23gx9vmb/checkpoints/epoch=299-step=52800.ckpt"
-#    MODEL_DIR: "/home/sxu/SJTU/FastMRT/fastMRT/Codes/logs/RUNET/2qfi9s64/checkpoints/epoch=149-step=38100.ckpt"
-    LR: 5e-5
+DATA:
+  FORMAT: 'CF'           # Fixed Param
+  BATCH_SIZE: 4               # Variable Param 01 recommend 16
+  SAMPLING_MODE: 'EQUISPACED'     # Variable Param 02
+  ACCELERATION: 4             # Variable Param 03
+  CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
+MODEL:
+  IN_CHANNELS: 1              # Fixed Param
+  OUT_CHANNELS: 1             # Fixed Param
+  BASE_CHANNELS: 16           # Variable Param 07 recommend 32
+  LEVEL_NUM: 4                # Variable Param 08 recommend 4
+  DROP_PROB: 0.0              # Variable Param 09 毫无影响
+  LEAKYRELU_SLOPE: 0.1        # Variable Param 10 recommend 0.1
+  LAST_LAYER_WITH_ACT: False  # Variable Param 11 几乎无影响
+  LR: 5e-4                    # Variable Param 12 recommend 1e-3
+  LR_STEP_SIZE: 40            # Variable Param 13
+  LR_GAMMA: 0.1               # Variable Param 14
+  WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
+  LOSS_TYPE: 'l1'
+  MAX_EPOCHS: 200             # Independent Param
+LOG:
+  NAME: 'exp0415-0|debug|bs4'  # Independent Param
+  IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
+  IMAGES_FREQ: 50         # Independent Param
+  TMAP_PATCH_RATE: 4          # Independent Param
+  TMAP_MAX_TEMP_THRESH: 45    # Independent Param
+  TMAP_HEATED_THRESH: 43    # Independent Param
+AUGS:
+  AP_SHUFFLE: False
+  UNION: True
+  OBJS: []
+  AP_LOGIC: "and"
+  LIST: ["crop", "rotate", "blur", "flip"]
+  COMPOSE_NUM: 1
 
 
 
