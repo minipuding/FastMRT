@@ -11,7 +11,6 @@ from fastmrt.utils.trans import complex_np_to_amp_phase_np as cn2apn
 from fastmrt.utils.trans import real_np_to_complex_np as rn2cn
 from fastmrt.utils.trans import complex_np_to_real_np as cn2rn
 from fastmrt.utils.fftc import ifft2c_tensor, fft2c_tensor, ifft2c_numpy, fft2c_numpy
-from fastmrt.utils.resize import resize, resize_on_kspace, resize_on_image
 from fastmrt.utils.normalize import normalize_apply, normalize_paras
 import numpy as np
 
@@ -30,7 +29,7 @@ class FastmrtSample(NamedTuple):
     std: Union[float, torch.Tensor]
     # For record data
     metainfo: Dict
-    
+
 
 class FastmrtDataTransform2D:
 

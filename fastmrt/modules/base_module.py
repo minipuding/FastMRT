@@ -12,7 +12,6 @@ from typing import Dict, Sequence
 from torch import nn
 
 from fastmrt.utils.metrics import FastmrtMetrics
-from fastmrt.utils.rss import rss_tensor
 from fastmrt.utils.normalize import denormalize
 from fastmrt.utils.trans import real_tensor_to_complex_tensor as rt2ct
 from fastmrt.utils.trans import complex_tensor_to_real_tensor as ct2rt
