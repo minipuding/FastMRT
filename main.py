@@ -72,10 +72,10 @@ def build_args():
         prf_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
 
     # load net config (hypeparameters)
-    if parser.parse_args().net == 'r-unet':
+    if parser.parse_args().net == 'runet':
         with open(dir_cfg['RUNET_CONFIG_DIR']) as fconfig:
             net_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
-    elif parser.parse_args().net == 'c-unet':
+    elif parser.parse_args().net == 'cunet':
         with open(dir_cfg['CUNET_CONFIG_DIR']) as fconfig:
             net_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
     elif parser.parse_args().net == 'resunet':
@@ -179,7 +179,8 @@ class FastmrtRunner:
             self.logger = loggers.WandbLogger(save_dir=self.args.log_dir, name=self.args.log_name, project=self.args.net.upper())
 
             # add FLOPs and params to log
-            flops, params = thop.profile(self.model_module.model, (torch.randn(1, 2, 96, 96), ))
+            pesudo_img = torch.randn(1, 1, 96, 96) + 1j if args.net == 'cunet' else torch.randn(1, 2, 96, 96)
+            flops, params = thop.profile(self.model_module.model, (pesudo_img, ))
             log_cfgs["FLOPs"] = "%.2fG" % (flops * 1e-9)
             log_cfgs["params"] = "%.2fM" % (params * 1e-6)
             self.logger.log_hyperparams(log_cfgs)
@@ -200,7 +201,7 @@ class FastmrtRunner:
         self.trainer.fit(self.model_module, datamodule=self.data_module)
 
     def _init_model_module(self, args):
-        if args.net == 'r-unet':
+        if args.net == 'runet':
             return UNetModule(
                 in_channels=args.model_in_channels,
                 out_channels=args.model_out_channels,
@@ -217,7 +218,7 @@ class FastmrtRunner:
                 log_images_frame_idx=args.log_images_frame_idx,
                 log_images_freq=args.log_images_freq
             )
-        elif args.net == 'c-unet':
+        elif args.net == 'cunet':
             return CUNetModule(
                 in_channels=args.model_in_channels,
                 out_channels=args.model_out_channels,
@@ -335,7 +336,8 @@ class FastmrtRunner:
                 log_images_freq=args.log_images_freq
             )
         else:
-            raise ValueError("``--net`` must be one of 'r-unet', 'casnet', rftnet, but {} was got.".format(args.net))
+            raise ValueError("``--net`` must be one of 'runet', 'cunet', 'resunet', 'swtnet', \
+                             'casnet' and 'kdnet' but {} was got.".format(args.net))
 
 if __name__ == "__main__":
 

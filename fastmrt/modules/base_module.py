@@ -129,6 +129,22 @@ class BaseModule(pl.LightningModule):
         if self.is_log_media_metrics is True:
             if (self.current_epoch + 1) % self.log_images_freq == 0:
                 self._log_medias(val_logs, f"val_medias")
+    
+    def test_epoch_end(self, outputs) -> None:
+
+        # save image(amplitude) metrics
+        self._log_image_metrics(outputs, stage='val')
+
+        # save temperature maps metrics
+        full_tmaps, recon_tmaps = [], []
+        for log in outputs:
+            for sample_idx in range(log["input"].shape[0]):
+                if log["frame_idx"][sample_idx] > 0: # we only focus on temperature maps after first frame.
+                    full_tmaps += [self.tmap_prf_func(rt2ct(log["label"][sample_idx]),
+                                                    rt2ct(log["label_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
+                    recon_tmaps += [self.tmap_prf_func(rt2ct(log["output"][sample_idx]),
+                                                    rt2ct(log["output_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
+        self._log_tmap_metrics(full_tmaps, recon_tmaps)
 
     def on_train_end(self) -> None:
         t = time.localtime()
@@ -438,15 +454,8 @@ class FastmrtModule(BaseModule):
             "coil_idx": batch.metainfo['coil_idx'],
         }
 
-    def test_step(self, batch):
-        output = self.model(batch.input)
-        mean = batch.mean.unsqueeze(1).unsqueeze(2).unsqueeze(3)
-        std = batch.std.unsqueeze(1).unsqueeze(2).unsqueeze(3)
-        return {
-            "input": (batch.input * std + mean),
-            "output": (output * std + mean),
-            "target": (batch.label * std + mean),
-        }
+    def test_step(self, batch, **kwargs):
+        self.validation_step(batch, None, **kwargs)
 
     def predict_step(self, batch):
         output = self.model(batch.input)
@@ -454,8 +463,8 @@ class FastmrtModule(BaseModule):
         mean = batch.mean.unsqueeze(1).unsqueeze(2).unsqueeze(3)
         std = batch.std.unsqueeze(1).unsqueeze(2).unsqueeze(3)
         return {
-            "output": denormalize(output, mean, std),
-            "label": denormalize(batch.label, mean, std),
+            "output": self.to_eval(output, mean, std),
+            "label": self.to_eval(batch.label, mean, std),
             "pred_loss": pred_loss,
         }
 

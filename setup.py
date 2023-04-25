@@ -5,8 +5,7 @@ setup(
     version='v0.1.0',
     packages=['fastmrt'],
     install_requires=[
-        'numpy',
-        'pandas'
+        'requires'
     ],
     author='Sijie Xu',
     author_email='sijie.x@sjtu.edu.cn',

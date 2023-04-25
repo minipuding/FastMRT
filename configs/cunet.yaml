@@ -2,7 +2,7 @@
 
 DATA:
   FORMAT: 'CF'           # Fixed Param
-  BATCH_SIZE: 4               # Variable Param 01 recommend 16
+  BATCH_SIZE: 8               # Variable Param 01 recommend 16
   SAMPLING_MODE: 'EQUISPACED'     # Variable Param 02
   ACCELERATION: 4             # Variable Param 03
   CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
@@ -21,7 +21,7 @@ MODEL:
   LOSS_TYPE: 'l1'
   MAX_EPOCHS: 200             # Independent Param
 LOG:
-  NAME: 'exp0415-0|debug|bs4'  # Independent Param
+  NAME: 'exp0425-1|baseline|bs8'  # Independent Param
   IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
   IMAGES_FREQ: 50         # Independent Param
   TMAP_PATCH_RATE: 4          # Independent Param
@@ -29,7 +29,7 @@ LOG:
   TMAP_HEATED_THRESH: 43    # Independent Param
 AUGS:
   AP_SHUFFLE: False
-  UNION: True
+  UNION: False
   OBJS: []
   AP_LOGIC: "and"
   LIST: ["crop", "rotate", "blur", "flip"]
