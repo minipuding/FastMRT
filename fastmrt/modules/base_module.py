@@ -267,10 +267,10 @@ class BaseModule(pl.LightningModule):
 
             # add amplitude images to log
             vmin, vmax = log_label_rss.min(), log_label_rss.max()
-            self.logger.log_image(f"{section_name}/A_input", [log_input_rss], self.current_epoch + 1, vmin=vmin, vmax=vmax)
-            self.logger.log_image(f"{section_name}/B_label", [log_label_rss], self.current_epoch + 1, vmin=vmin, vmax=vmax)
-            self.logger.log_image(f"{section_name}/C_output", [log_output_rss], self.current_epoch + 1, vmin=vmin, vmax=vmax)
-            self.logger.log_image(f"{section_name}/D_error", [log_error_rss], self.current_epoch + 1, vmin=vmin, vmax=vmax)
+            self.logger.log_image(f"{section_name}/A_input", [self._vmin_max(log_input_rss, vmin=vmin, vmax=vmax)], self.current_epoch + 1)
+            self.logger.log_image(f"{section_name}/B_label", [self._vmin_max(log_label_rss, vmin=vmin, vmax=vmax)], self.current_epoch + 1)
+            self.logger.log_image(f"{section_name}/C_output", [self._vmin_max(log_output_rss, vmin=vmin, vmax=vmax)], self.current_epoch + 1)
+            self.logger.log_image(f"{section_name}/D_error", [self._vmin_max(log_error_rss, vmin=vmin, vmax=vmax)], self.current_epoch + 1)
 
             # obtain input, label & output reference images
             log_input_ref = logs[batch_idx]["input_ref"][sample_idx].squeeze(0)
@@ -360,6 +360,10 @@ class BaseModule(pl.LightningModule):
         # save to log
         self.logger.experiment.log({fig_name: wandb.Image(plt)})
         plt.close(fig)
+    
+    @staticmethod
+    def _vmin_max(image, vmin, vmax):
+        return (image - image.min()) / (vmax - vmin)
 
 
 
@@ -487,6 +491,9 @@ class FastmrtModule(BaseModule):
         
         # turn to complex data format
         if torch.is_complex(label):
+            output_complex = output
+            label_complex = label
+        else:
             output_complex = rt2ct(output)
             label_complex = rt2ct(label)
 

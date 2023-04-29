@@ -15,10 +15,10 @@ MODEL:
   LEAKYRELU_SLOPE: 0.1        # Variable Param 10 recommend 0.1
   LR: 5e-4                    # Variable Param 12 recommend 1e-3
   WEIGHT_DECAY: 1e-4          # Variable Param 15 recommend 1e-4
-  LOSS_TYPE: 'l1'
+  LOSS_TYPE: 'decoupled'
   MAX_EPOCHS: 200             # Independent Param
 LOG:
-  NAME: "exp0425-0|baseline"  # Baseline
+  NAME: "exp0428-0|loss=decoupled"  # Baseline
   IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
   IMAGES_FREQ: 50         # Independent Param
   TMAP_PATCH_RATE: 4          # Independent Param

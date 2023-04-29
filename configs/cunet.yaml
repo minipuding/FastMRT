@@ -18,10 +18,10 @@ MODEL:
   LR_STEP_SIZE: 40            # Variable Param 13
   LR_GAMMA: 0.1               # Variable Param 14
   WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
-  LOSS_TYPE: 'l1'
+  LOSS_TYPE: 'decoupled'
   MAX_EPOCHS: 200             # Independent Param
 LOG:
-  NAME: 'exp0425-1|baseline|bs8'  # Independent Param
+  NAME: 'exp0428-1|loss=decoupled|bs8'  # Independent Param
   IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
   IMAGES_FREQ: 50         # Independent Param
   TMAP_PATCH_RATE: 4          # Independent Param
