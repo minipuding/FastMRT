@@ -10,18 +10,25 @@ MODEL:
   IN_CHANNELS: 2              # Fixed Param
   OUT_CHANNELS: 2             # Fixed Param
   BASE_CHANNELS: 32           # Variable Param 07 recommend 32
-  LEVEL_NUM: 4                # Variable Param 08 recommend 4
-  DROP_PROB: 0.0              # Variable Param 09 毫无影响
-  LEAKYRELU_SLOPE: 0.1        # Variable Param 10 recommend 0.1
+  CH_MULT: 
+    - 1
+    - 2
+    - 2
+    - 2
+  ATTN: 
+    - 3
+  NUM_RES_BLOCK: 2
+  DROP_PROB: 0.1              # Variable Param 09 毫无影响
   LR: 5e-4                    # Variable Param 12 recommend 1e-3
-  WEIGHT_DECAY: 1e-4          # Variable Param 15 recommend 1e-4
+  WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
   LOSS_TYPE: 'l1'
   MAX_EPOCHS: 200             # Independent Param
 LOG:
-  NAME: "exp0503-1|loss=l1|augs=False|phantom_v5.0"  # Baseline
+  NAME: 'exp0503-3|loss=l1|augs=False|phantom_v5.0'  # Baseline
   IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
   IMAGES_FREQ: 50         # Independent Param
   TMAP_PATCH_RATE: 4          # Independent Param
+  TMAP_MAX_TEMP_THRESH: 45    # Independent Param
   TMAP_HEATED_THRESH: 43    # Independent Param
 AUGS:
   UNION: False
@@ -33,8 +40,4 @@ AUGS:
     - "blur"
     - "flip"
   COMPOSE_NUM: 1
-
-
-
-
 

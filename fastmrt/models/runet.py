@@ -1,20 +1,39 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from torchsummary import summary
 
 
 class Unet(nn.Module):
+    """
+     This is a naive implementation of Unet with the following structure:
+         _______________________________________________________________________________________________
+        | input --> conv_block   ······························>   trans_conv --> conv_block --> output |
+        |             |                                                   |                             |
+        |         max_pool2d --> conv_block  ·····>  trans_conv --> conv_block                          |
+        |                             ...               ...                                             |
+        |                             max_pool2d --> conv_block                                         |
+        |_______________________________________________________________________________________________|
+    The conv_block consists of two `conv->bn->leaky_relu`.
+
+    Args:
+        in_channels: int, input channel, 2 for real type image.
+        out_channels: int, output channels as `in_channels`.
+        base_channels: int, the first conv block channels and subsequent conv block would double based
+            on the `base_channels` with gradual downsampling, default is 32.
+        level_num: int, the number of levels of Unet, default is 4.
+        drop_prob: float, dropout probability applied in each conv and trans conv block.
+        leakyrelu_slope: float, leaky ReLU slope.
+    """
+
 
     def __init__(
         self,
-        in_channels: int,
-        out_channels: int,
-        base_channels: int,
-        level_num: int = 4,
-        drop_prob: float = 0.0,
-        leakyrelu_slope: float = 0.4,
-        last_layer_with_act: bool = False
+        in_channels: int=2,
+        out_channels: int=2,
+        base_channels: int=32,
+        level_num: int=4,
+        drop_prob: float=0.0,
+        leakyrelu_slope: float=0.1,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -23,7 +42,6 @@ class Unet(nn.Module):
         self.level_num = level_num
         self.drop_prob = drop_prob
         self.leakyrelu_slope = leakyrelu_slope
-        self.last_layer_with_act = last_layer_with_act
 
         self.down_convs = nn.ModuleList([ConvBlock(in_channels=self.in_channels,
                                                    out_channels=self.base_channels,
@@ -72,8 +90,17 @@ class Unet(nn.Module):
             output = up_conv_layer(output)
         return output
 
-
 class ConvBlock(nn.Module):
+    """
+    Naive convolutional block with `(conv->bn->leaky_relu->dropout)*2`
+
+    Args:
+        in_channels: int, input channel
+        out_channels: int, output channels.
+        drop_prob: float, dropout probability applied in each conv and trans conv block.
+        leakyrelu_slope: float, leaky ReLU slope.
+        with_act: bool, use activate function on last layer or not.
+    """
 
     def __init__(
             self,
@@ -105,8 +132,22 @@ class ConvBlock(nn.Module):
 
 
 class TransposeConvBlock(nn.Module):
+    """
+    Naive transpose convolutional block with `trans_conv->bn->leaky_relu->dropout`.
 
-    def __init__(self, in_channels: int, out_channels: int, drop_prob: float, leakyrelu_slope: float):
+    Args:
+        in_channels: int, input channel
+        out_channels: int, output channels.
+        drop_prob: float, dropout probability applied in each conv and trans conv block.
+        leakyrelu_slope: float, leaky ReLU slope.
+    """
+    def __init__(
+            self, 
+            in_channels: int, 
+            out_channels: int, 
+            drop_prob: float, 
+            leakyrelu_slope: float
+        ):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -120,8 +161,3 @@ class TransposeConvBlock(nn.Module):
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         return self.layers(input)
-
-if __name__ == "__main__":
-    net = Unet(2, 2, 24)
-    input_data = torch.randn(8, 2, 256, 256)
-    summary(net, input_data, device='cpu', depth=5)

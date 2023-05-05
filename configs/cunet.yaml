@@ -1,0 +1,39 @@
+
+DATA:
+  FORMAT: 'CF'           # Fixed Param
+  BATCH_SIZE: 8               # Variable Param 01 recommend 16
+  SAMPLING_MODE: 'EQUISPACED'     # Variable Param 02
+  ACCELERATION: 4             # Variable Param 03
+  CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
+MODEL:
+  IN_CHANNELS: 1              # Fixed Param
+  OUT_CHANNELS: 1             # Fixed Param
+  BASE_CHANNELS: 16           # Variable Param 07 recommend 32
+  LEVEL_NUM: 4                # Variable Param 08 recommend 4
+  DROP_PROB: 0.0              # Variable Param 09 毫无影响
+  LEAKYRELU_SLOPE: 0.1        # Variable Param 10 recommend 0.1
+  LAST_LAYER_WITH_ACT: False  # Variable Param 11 几乎无影响
+  LR: 5e-4                    # Variable Param 12 recommend 1e-3
+  LR_STEP_SIZE: 40            # Variable Param 13
+  LR_GAMMA: 0.1               # Variable Param 14
+  WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
+  LOSS_TYPE: 'decoupled'
+  MAX_EPOCHS: 200             # Independent Param
+LOG:
+  NAME: 'exp0501-1|loss=decoupled|augs=True|bs8'  # Independent Param
+  IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
+  IMAGES_FREQ: 50         # Independent Param
+  TMAP_PATCH_RATE: 4          # Independent Param
+  TMAP_MAX_TEMP_THRESH: 45    # Independent Param
+  TMAP_HEATED_THRESH: 43    # Independent Param
+AUGS:
+  UNION: True
+  OBJS: []
+  AP_LOGIC: "and"
+  LIST: ["crop", "rotate", "blur", "flip"]
+  COMPOSE_NUM: 1
+
+
+
+
+

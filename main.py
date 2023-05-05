@@ -1,363 +1,349 @@
 import torch
-import torch.nn.functional as F
-import numpy as np
 import pytorch_lightning as pl
 from pytorch_lightning import loggers
 from argparse import ArgumentParser
 import yaml
-from cli import FastmrtCLI
-from typing import NamedTuple
+import thop
+from torchvision.transforms import Compose
 
-from fastmrt.data.dataset import SliceDataset
 from fastmrt.data.mask import RandomMaskFunc, EquiSpacedMaskFunc, apply_mask
-from fastmrt.data.transforms import UNetDataTransform, CasNetDataTransform, RFTNetDataTransform
+from fastmrt.data.transforms import FastmrtDataTransform2D
 from fastmrt.data.prf import PrfHeader, PrfFunc
+from fastmrt.data.augs import ComplexAugs
 from fastmrt.modules.data_module import FastmrtDataModule
-from fastmrt.modules.unet_module import UNetModule
-from fastmrt.modules.casnet_module import CasNetModule
-from fastmrt.modules.rftnet_module import RFTNetModule
+from fastmrt.modules.model_module import (
+    UNetModule, 
+    CUNetModule, 
+    ResUNetModule,
+    CasNetModule,
+    SwtNetModule,
+    KDNetModule,
+)
 from fastmrt.models.runet import Unet
+from fastmrt.utils.seed import randomness
 from fastmrt.pretrain.transforms import FastmrtPretrainTransform
-
 
 # build args
 def build_args():
+    """
+    Add command inplements and read configs, then flatten it as a dict.
+    Returns:
+        args: all argments from `parser.parse_args()`
+        log_cfgs: the args should add to logger.
+    """
+
+    def flatten_dict(d, parent_key='', sep='_'):
+        items = []
+        for k, v in d.items():
+            new_key = f'{parent_key}{sep}{k.lower()}' if parent_key else k.lower()
+            if isinstance(v, dict):
+                items.extend(flatten_dict(v, new_key, sep=sep).items())
+            else:
+                items.append((new_key, v))
+        return dict(items)
+
+    def parse_args_from_dict(cfgs, parser):
+        flat_cfgs = flatten_dict(cfgs)
+        for key, value in flat_cfgs.items():
+            parser.add_argument(f'--{key}', type=type(value), default=value)
+        return parser.parse_args()
+    
     parser = ArgumentParser()
+    cfgs, log_cfgs = {}, {}
 
     # model choice & load dir config
-    parser.add_argument('--net', type=str, required=True,
-                        help="(str request) One of 'r-unet', 'casnet', 'gannet', 'complexnet'")
-    parser.add_argument('--stage', type=str, required=True,
+    parser.add_argument('-n', '--net', type=str, required=True,
+                        help="(str request) One of 'r-unet', 'c-unet', 'casnet', 'gannet', 'complexnet'")
+    parser.add_argument('-s', '--stage', type=str, required=True,
                         help="(str request) One of 'train', 'pre-train', 'fine-tune', 'test'")
-    parser.add_argument('--dir_config', type=str, default='./configs/dir.yaml',
+    parser.add_argument('-g', '--gpus', type=int, required=False, default=[0], nargs='+',
+                        help="(int request) gpu(s) index")
+    parser.add_argument('-dc', '--dir_config', type=str, default='./configs/dir.yaml',
                         help="(str optional) the directory of config that saves other paths.")
+    parser.add_argument('-nul', '--no_use_logger', action='store_true', default=False,
+                        help="(bool optional) whether using logger.")
 
     # load directory config
     with open(parser.parse_args().dir_config) as fconfig:
         dir_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
-    parser = FastmrtCLI.dir_cli(parser, dir_cfg)
 
     # load prf config
-    with open(parser.parse_args().prf_config_dir) as fconfig:
+    with open(dir_cfg['PRF_CONFIG_DIR']) as fconfig:
         prf_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
-    parser = FastmrtCLI.prf_cli(parser, prf_cfg)
 
     # load net config (hypeparameters)
-    if parser.parse_args().net == 'r-unet':
-        with open(parser.parse_args().runet_config_dir) as fconfig:
-            runet_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
-        parser = FastmrtCLI.runet_cli(parser, runet_cfg)
+    if parser.parse_args().net == 'runet':
+        with open(dir_cfg['RUNET_CONFIG_DIR']) as fconfig:
+            net_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
+    elif parser.parse_args().net == 'cunet':
+        with open(dir_cfg['CUNET_CONFIG_DIR']) as fconfig:
+            net_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
+    elif parser.parse_args().net == 'resunet':
+        with open(dir_cfg['RESUNET_CONFIG_DIR']) as fconfig:
+            net_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
+    elif parser.parse_args().net == 'swtnet':
+        with open(dir_cfg['SWTNET_CONFIG_DIR']) as fconfig:
+            net_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
     elif parser.parse_args().net == 'casnet':
-        with open(parser.parse_args().casnet_config_dir) as fconfig:
-            casnet_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
-        parser = FastmrtCLI.casnet_cli(parser, casnet_cfg)
-    elif parser.parse_args().net == 'rftnet':
-        with open(parser.parse_args().rftnet_config_dir) as fconfig:
-            rftnet_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
-        parser = FastmrtCLI.rftnet_cli(parser, rftnet_cfg)
+        with open(dir_cfg['CASNET_CONFIG_DIR']) as fconfig:
+            net_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
+    elif parser.parse_args().net == 'kdnet':
+        with open(dir_cfg['KDNET_CONFIG_DIR']) as fconfig:
+            net_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
 
-    return parser.parse_args()
+    # collect all configs and turn to args
+    cfgs.update(dir_cfg)
+    cfgs.update(prf_cfg)
+    cfgs.update(net_cfg)
+    args = parse_args_from_dict(cfgs, parser)
 
-def run(args):
+    # collect configs requires to log
+    log_cfgs.update(net_cfg)
+    log_cfgs.update(dict(DATA_DIR=cfgs["DATA_DIR"]))
+    log_cfgs = flatten_dict(log_cfgs)
 
-    if args.net == 'r-unet':
+    # turn str to float for some special params
+    args.model_lr = log_cfgs["model_lr"] = float(args.model_lr)
+    args.model_weight_decay = log_cfgs["model_weight_decay"] = float(args.model_weight_decay)
 
-        # Obtain Mask Function
-        if args.sampling_mode == "RANDOM":
-            mask_func = RandomMaskFunc(center_fraction=args.center_fraction,
-                                       acceleration=args.acceleration)
-        elif args.sampling_mode == "EQUISPACED":
-            mask_func = EquiSpacedMaskFunc(center_fraction=args.center_fraction,
-                                           acceleration=args.acceleration)
-        # Obtain PRF Function
-        prf_func = PrfFunc(prf_header=PrfHeader(
-            B0=args.b0,
-            gamma=args.gamma,
-            alpha=args.alpha,
-            TE=args.te,
+    return args, log_cfgs
+
+class FastmrtRunner:
+
+    def __init__(self, args, log_cfgs) -> None:
+
+        self.args = args
+
+        # initialize mask function
+        if args.data_sampling_mode == "RANDOM":
+            self.mask_func = RandomMaskFunc(center_fraction=args.data_center_fraction,
+                                            acceleration=self.args.data_acceleration)
+        elif args.data_sampling_mode == "EQUISPACED":
+            self.mask_func = EquiSpacedMaskFunc(center_fraction=args.data_center_fraction,
+                                                acceleration=self.args.data_acceleration)
+        
+        # initialize prf function
+        self.prf_func = PrfFunc(
+            prf_header=PrfHeader(
+                B0=self.args.b0,
+                gamma=self.args.gamma,
+                alpha=self.args.alpha,
+                TE=self.args.te,
         ))
 
-        # Obtain Transforms
-        if args.stage == 'train' or args.stage == 'fine-tune':
-            project_name = "RUNET"
-            dataset_type = "2D"
-            root = args.data_dir
-            train_transform = UNetDataTransform(mask_func=mask_func,
-                                                prf_func=prf_func,
-                                                data_format=args.data_format,
-                                                use_random_seed=True,
-                                                resize_size=args.resize_size,
-                                                resize_mode=args.resize_mode,
-                                                fftshift_dim=-2)
-            val_transform = UNetDataTransform(mask_func=mask_func,
-                                              prf_func=prf_func,
-                                              data_format=args.data_format,
-                                              use_random_seed=False,
-                                              resize_size=args.resize_size,
-                                              resize_mode=args.resize_mode,
-                                              fftshift_dim=-2)
-        elif args.stage == 'pre-train':
-            project_name = "PRETRAIN_RUNET"
-            dataset_type = "PT"
-            root = args.pt_data_dir
-            train_transform = FastmrtPretrainTransform(mask_func=mask_func,
-                                                       prf_func=prf_func,
-                                                       data_format=args.data_format,
-                                                       use_random_seed=True,
-                                                       resize_size=args.resize_size,
-                                                       resize_mode=args.resize_mode,
-                                                       fftshift_dim=(-2, -1),
-                                                       simufocus_type=args.sf_type,
-                                                       net=args.net,
-                                                       frame_num=args.sf_frame_num,
-                                                       cooling_time_rate=args.sf_cooling_time_rate,
-                                                       center_crop_size=args.sf_center_crop_size,
-                                                       random_crop_size=args.sf_random_crop_size,
-                                                       max_delta_temp=args.sf_max_delta_temp,
-                                                       )
-            val_transform = FastmrtPretrainTransform(mask_func=mask_func,
-                                                     prf_func=prf_func,
-                                                     data_format=args.data_format,
-                                                     use_random_seed=False,
-                                                     resize_size=args.resize_size,
-                                                     resize_mode=args.resize_mode,
-                                                     fftshift_dim=(-2, -1),
-                                                     simufocus_type=args.sf_type,
-                                                     net=args.net,
-                                                     frame_num=args.sf_frame_num,
-                                                     cooling_time_rate=args.sf_cooling_time_rate,
-                                                     center_crop_size=args.sf_center_crop_size,
-                                                     random_crop_size=args.sf_random_crop_size,
-                                                     max_delta_temp=args.sf_max_delta_temp,
-                                                     )
+        # initialize augmentation function
+        self.augs_func = ComplexAugs(
+            union=self.args.augs_union,
+            objs=self.args.augs_objs,
+            ap_logic=self.args.augs_ap_logic,
+            augs_list=self.args.augs_list,
+            compose_num=self.args.augs_compose_num
+        )
 
-        # Create Data Module
-        data_module = FastmrtDataModule(root=root,
-                                        train_transform=train_transform,
-                                        val_transform=val_transform,
-                                        test_transform=val_transform,
-                                        batch_size=args.batch_size,
-                                        dataset_type=dataset_type)
+        # initialize transforms
+        self.train_transform = FastmrtDataTransform2D(
+            mask_func=self.mask_func,
+            prf_func=self.prf_func,
+            aug_func=self.augs_func,
+            data_format=self.args.data_format,
+            use_random_seed=True,
+            fftshift_dim=(-2, -1)
+        )
+        self.val_transform = FastmrtDataTransform2D(
+            mask_func=self.mask_func,
+            prf_func=self.prf_func,
+            aug_func=None,
+            data_format=self.args.data_format,
+            use_random_seed=False,
+            fftshift_dim=(-2, -1),
+        )
+        self.test_transform = self.val_transform
 
-        # Create RUnet Module
-        unet_module = UNetModule(in_channels=args.in_channels,
-                                 out_channels=args.out_channels,
-                                 base_channels=args.base_channels,
-                                 level_num=args.level_num,
-                                 drop_prob=args.drop_prob,
-                                 leakyrelu_slope=args.leakyrelu_slope,
-                                 last_layer_with_act=args.last_layer_with_act,
-                                 lr=args.lr,
-                                 lr_step_size=args.lr_step_size,
-                                 lr_gamma=args.lr_gamma,
-                                 weight_decay=args.weight_decay,
-                                 tmap_prf_func=prf_func,
-                                 tmap_patch_rate=args.tmap_patch_rate,
-                                 tmap_max_temp_thresh=args.tmap_max_temp_thresh,
-                                 tmap_ablation_thresh=args.tmap_ablation_thresh,
-                                 log_images_frame_idx=args.log_images_frame_idx,
-                                 log_images_freq=args.log_images_freq)
+        # initialize data module
+        self.data_module = FastmrtDataModule(
+            root=self.args.data_dir,
+            train_transform=self.train_transform,
+            val_transform=self.val_transform,
+            test_transform=self.test_transform,
+            batch_size=self.args.data_batch_size,
+            dataset_type='2D',
+        )
 
-        # Judge whether the stage is ``fine-tune``
-        if args.stage == "fine-tune":
-            unet_module.load_state_dict(torch.load(args.model_dir)["state_dict"])
-            # unet_module.model.down_convs.requires_grad_(False)  # freeze encoder
+        # initialize model module
+        self.model_module = self._init_model_module(args=args)
 
-        # Create Logger & Add Hparams
-        logger = loggers.WandbLogger(save_dir=args.log_dir, name=args.log_name, project=project_name)
-        hparams = {
-            "net": args.net,
-            "batch_size": args.batch_size,
-            "sampling_mode": args.sampling_mode,
-            "acceleration": args.acceleration,
-            "center_fraction": args.center_fraction,
-            "resize_size": args.resize_size,
-            "resize_mode": args.resize_mode,
+        # initialize logger
+        if args.no_use_logger is False:
 
-            "base_channels": args.base_channels,
-            "level_num": args.level_num,
-            "drop_prob": args.drop_prob,
-            "leakyrelu_slope": args.leakyrelu_slope,
-            "last_layer_with_act": args.last_layer_with_act,
-            "lr": args.lr,
-            "lr_step_size": args.lr_step_size,
-            "lr_gamma": args.lr_gamma,
-            "weight_decay": args.weight_decay,
-            "max_epochs": args.max_epochs,
-        }
-        logger.log_hyperparams(hparams)
+            # define wandb logger
+            self.logger = loggers.WandbLogger(save_dir=self.args.log_dir, name=self.args.log_name, project=self.args.net.upper())
+
+            # add FLOPs and params to log
+            pesudo_img = torch.randn(1, 1, 96, 96) + 1j if args.net == 'cunet' else torch.randn(1, 2, 96, 96)
+            flops, params = thop.profile(self.model_module.model, (pesudo_img, ))
+            log_cfgs["FLOPs"] = "%.2fG" % (flops * 1e-9)
+            log_cfgs["params"] = "%.2fM" % (params * 1e-6)
+            self.logger.log_hyperparams(log_cfgs)
+        else:
+            
+            self.logger = False
 
         # Create Traner
-        trainer = pl.Trainer(gpus=[1, 0],
-                             strategy='ddp',
-                             enable_progress_bar=False,
-                             max_epochs=args.max_epochs,
-                             logger=logger)
+        self.trainer = pl.Trainer(
+            gpus=args.gpus,
+            strategy='ddp' if len(args.gpus) > 1 else None,
+            enable_progress_bar=False,
+            max_epochs=args.model_max_epochs,
+            logger=self.logger
+        )
 
-        # Start Training
-        trainer.fit(unet_module, datamodule=data_module)
-    elif args.net == 'casnet':
+    def run(self):
+        self.trainer.fit(self.model_module, datamodule=self.data_module)
 
-        # Obtain Mask Function
-        if args.sampling_mode == "RANDOM":
-            mask_func = RandomMaskFunc(center_fraction=args.center_fraction,
-                                       acceleration=args.acceleration)
-        elif args.sampling_mode == "EQUISPACED":
-            mask_func = EquiSpacedMaskFunc(center_fraction=args.center_fraction,
-                                           acceleration=args.acceleration)
-        # Obtain PRF Function
-        prf_func = PrfFunc(prf_header=PrfHeader(
-            B0=args.b0,
-            gamma=args.gamma,
-            alpha=args.alpha,
-            TE=args.te,
-        ))
+    def _init_model_module(self, args):
+        if args.net == 'runet':
+            return UNetModule(
+                in_channels=args.model_in_channels,
+                out_channels=args.model_out_channels,
+                base_channels=args.model_base_channels,
+                level_num=args.model_level_num,
+                drop_prob=args.model_drop_prob,
+                loss_type=args.model_loss_type,
+                max_epochs=args.model_max_epochs,
+                lr=args.model_lr,
+                weight_decay=args.model_weight_decay,
+                tmap_prf_func=self.prf_func,
+                tmap_patch_rate=args.log_tmap_patch_rate,
+                tmap_heated_thresh=args.log_tmap_heated_thresh,
+                log_images_frame_idx=args.log_images_frame_idx,
+                log_images_freq=args.log_images_freq
+            )
+        elif args.net == 'cunet':
+            return CUNetModule(
+                in_channels=args.model_in_channels,
+                out_channels=args.model_out_channels,
+                base_channels=args.model_base_channels,
+                level_num=args.model_level_num,
+                drop_prob=args.model_drop_prob,
+                loss_type=args.model_loss_type,
+                max_epochs=args.model_max_epochs,
+                lr=args.model_lr,
+                weight_decay=args.model_weight_decay,
+                tmap_prf_func=self.prf_func,
+                tmap_patch_rate=args.log_tmap_patch_rate,
+                tmap_heated_thresh=args.log_tmap_heated_thresh,
+                log_images_frame_idx=args.log_images_frame_idx,
+                log_images_freq=args.log_images_freq
+            )
+        elif args.net == 'resunet':
+            return ResUNetModule(
+                in_channels=args.model_in_channels,
+                out_channels=args.model_out_channels,
+                base_channels=args.model_base_channels,
+                ch_mult=args.model_ch_mult,
+                attn=args.model_attn,
+                num_res_blocks=args.model_num_res_block,
+                drop_prob=args.model_drop_prob,
+                loss_type=args.model_loss_type,
+                max_epochs=args.model_max_epochs,
+                lr=args.model_lr,
+                weight_decay=args.model_weight_decay,
+                tmap_prf_func=self.prf_func,
+                tmap_patch_rate=args.log_tmap_patch_rate,
+                tmap_heated_thresh=args.log_tmap_heated_thresh,
+                log_images_frame_idx=args.log_images_frame_idx,
+                log_images_freq=args.log_images_freq
+            )
+        elif args.net == 'swtnet':
+            return SwtNetModule(
+                upscale=args.model_upscale,
+                in_channels=args.model_in_channels,
+                img_size=args.model_img_size,
+                patch_size=args.model_patch_size,
+                window_size=args.model_window_size,
+                img_range=args.model_img_range,
+                depths=args.model_depths,
+                embed_dim=args.model_embed_dim,
+                num_heads=args.model_num_heads,
+                mlp_ratio=args.model_mlp_ratio,
+                upsampler=args.model_upsampler,
+                resi_connection=args.model_resi_connection,
+                loss_type=args.model_loss_type,
+                max_epochs=args.model_max_epochs,
+                lr=args.model_lr,
+                weight_decay=args.model_weight_decay,
+                tmap_prf_func=self.prf_func,
+                tmap_patch_rate=args.log_tmap_patch_rate,
+                tmap_heated_thresh=args.log_tmap_heated_thresh,
+                log_images_frame_idx=args.log_images_frame_idx,
+                log_images_freq=args.log_images_freq
+            )
+        elif args.net == 'casnet':
+            return CasNetModule(
+                in_channels=args.model_in_channels,
+                out_channels=args.model_out_channels,
+                base_channels=args.model_base_channels,
+                res_block_num=args.model_res_block_num,
+                res_conv_ksize=args.model_res_conv_ksize,
+                res_conv_num=args.model_res_conv_num,
+                drop_prob=args.model_drop_prob,
+                leakyrelu_slope=args.model_leakyrelu_slope,
+                loss_type=args.model_loss_type,
+                max_epochs=args.model_max_epochs,
+                lr=args.model_lr,
+                weight_decay=args.model_weight_decay,
+                tmap_prf_func=self.prf_func,
+                tmap_patch_rate=args.log_tmap_patch_rate,
+                tmap_heated_thresh=args.log_tmap_heated_thresh,
+                log_images_frame_idx=args.log_images_frame_idx,
+                log_images_freq=args.log_images_freq
+            )
+        elif args.net == 'kdnet':
+            tea_net = Unet(
+                in_channels=args.model_in_channels,
+                out_channels=args.model_out_channels,
+                base_channels=args.model_base_channels_tea
+            )
+            module_state_dict = torch.load(args.model_tea_dir)["state_dict"]
+            model_state_dict = tea_net.state_dict()
+            del_list=[]
+            for key in module_state_dict:
+                if 'total' in key:
+                    del_list.append(key)
+            for key in del_list:
+                module_state_dict.pop(key, None)
+            for model_key, module_key in zip(model_state_dict, module_state_dict):
+                model_state_dict[model_key] = module_state_dict[module_key]
+            tea_net.load_state_dict(model_state_dict)
+            stu_net = Unet(
+                in_channels=args.model_in_channels,
+                out_channels=args.model_out_channels,
+                base_channels=args.model_base_channels_stu
+            )
 
-        # Obtain Transforms
-        train_transform = CasNetDataTransform(mask_func, data_format=args.data_format)
-        val_transform = CasNetDataTransform(mask_func, data_format=args.data_format, use_random_seed=False)
-
-        # Create Data Module
-        data_module = FastmrtDataModule(root=args.data_dir,
-                                        train_transform=train_transform,
-                                        val_transform=val_transform,
-                                        test_transform=val_transform,
-                                        batch_size=args.batch_size)
-
-        # Create RUnet Module
-        casnet_module = CasNetModule(in_channels=args.in_channels,
-                                     out_channels=args.out_channels,
-                                     base_channels=args.base_channels,
-                                     res_block_num=args.res_block_num,
-                                     res_conv_ksize=args.res_conv_ksize,
-                                     res_conv_num=args.res_conv_num,
-                                     drop_prob=args.drop_prob,
-                                     leakyrelu_slope=args.leakyrelu_slope,
-                                     lr=args.lr,
-                                     lr_step_size=args.lr_step_size,
-                                     lr_gamma=args.lr_gamma,
-                                     weight_decay=args.weight_decay,
-                                     tmap_prf_func=prf_func,
-                                     tmap_patch_rate=args.tmap_patch_rate,
-                                     tmap_max_temp_thresh=args.tmap_max_temp_thresh,
-                                     tmap_ablation_thresh=args.tmap_ablation_thresh,
-                                     log_images_frame_idx=args.log_images_frame_idx,
-                                     log_images_freq=args.log_images_freq)
-
-        # Create Logger & Add Hparams
-        logger = loggers.WandbLogger(save_dir=args.log_dir, name=args.log_name, project="CASNET")
-        hparams = {
-            "net": args.net,
-            "batch_size": args.batch_size,
-            "sampling_mode": args.sampling_mode,
-            "acceleration": args.acceleration,
-            "center_fraction": args.center_fraction,
-            "resize_size": args.resize_size,
-            "resize_mode": args.resize_mode,
-
-            "base_channels": args.base_channels,
-            "res_block_num": args.res_block_num,
-            "res_conv_ksize": args.res_conv_ksize,
-            "res_conv_num": args.res_conv_num,
-            "drop_prob": args.drop_prob,
-            "leakyrelu_slope": args.leakyrelu_slope,
-            "lr": args.lr,
-            "lr_step_size": args.lr_step_size,
-            "lr_gamma": args.lr_gamma,
-            "weight_decay": args.weight_decay,
-            "max_epochs": args.max_epochs,
-        }
-        logger.log_hyperparams(hparams)
-
-        # Create Traner
-        trainer = pl.Trainer(gpus=[0],
-                             enable_progress_bar=False,
-                             max_epochs=args.max_epochs,
-                             logger=logger)
-
-        # Start Training
-        trainer.fit(casnet_module, datamodule=data_module)
-    elif args.net == 'rftnet':
-        # Obtain Mask Function
-        if args.sampling_mode == "RANDOM":
-            mask_func = RandomMaskFunc(center_fraction=args.center_fraction,
-                                       acceleration=args.acceleration)
-        elif args.sampling_mode == "EQUISPACED":
-            mask_func = EquiSpacedMaskFunc(center_fraction=args.center_fraction,
-                                           acceleration=args.acceleration)
-        # Obtain PRF Function
-        prf_func = PrfFunc(prf_header=PrfHeader(
-            B0=args.b0,
-            gamma=args.gamma,
-            alpha=args.alpha,
-            TE=args.te,
-        ))
-
-        # Obtain Transforms
-        train_transform = RFTNetDataTransform(mask_func, data_format=args.data_format)
-        val_transform = RFTNetDataTransform(mask_func, data_format=args.data_format, use_random_seed=False)
-
-        # Create Data Module
-        data_module = FastmrtDataModule(root=args.data_dir,
-                                        train_transform=train_transform,
-                                        val_transform=val_transform,
-                                        test_transform=val_transform,
-                                        batch_size=args.batch_size)
-
-        # Create RUnet Module
-        unet_module = RFTNetModule(in_channels=args.in_channels,
-                                 out_channels=args.out_channels,
-                                 base_channels=args.base_channels,
-                                 level_num=args.level_num,
-                                 drop_prob=args.drop_prob,
-                                 leakyrelu_slope=args.leakyrelu_slope,
-                                 last_layer_with_act=args.last_layer_with_act,
-                                 lr=args.lr,
-                                 lr_step_size=args.lr_step_size,
-                                 lr_gamma=args.lr_gamma,
-                                 weight_decay=args.weight_decay,
-                                 tmap_prf_func=prf_func,
-                                 tmap_patch_rate=args.tmap_patch_rate,
-                                 tmap_max_temp_thresh=args.tmap_max_temp_thresh,
-                                 tmap_ablation_thresh=args.tmap_ablation_thresh,
-                                 log_images_frame_idx=args.log_images_frame_idx,
-                                 log_images_freq=args.log_images_freq)
-
-        # Create Logger & Add Hparams
-        logger = loggers.WandbLogger(save_dir=args.log_dir, name=args.log_name, project="RFTNET")
-        hparams = {
-            "net": args.net,
-            "batch_size": args.batch_size,
-            "sampling_mode": args.sampling_mode,
-            "acceleration": args.acceleration,
-            "center_fraction": args.center_fraction,
-            "resize_size": args.resize_size,
-            "resize_mode": args.resize_mode,
-
-            "base_channels": args.base_channels,
-            "level_num": args.level_num,
-            "drop_prob": args.drop_prob,
-            "leakyrelu_slope": args.leakyrelu_slope,
-            "last_layer_with_act": args.last_layer_with_act,
-            "lr": args.lr,
-            "lr_step_size": args.lr_step_size,
-            "lr_gamma": args.lr_gamma,
-            "weight_decay": args.weight_decay,
-            "max_epochs": args.max_epochs,
-        }
-        logger.log_hyperparams(hparams)
-
-        # Create Traner
-        trainer = pl.Trainer(gpus=[0],
-                             enable_progress_bar=False,
-                             max_epochs=args.max_epochs,
-                             logger=logger)
-
-        # Start Training
-        trainer.fit(unet_module, datamodule=data_module)
-    else:
-        raise ValueError("``--net`` must be one of 'r-unet', 'casnet', rftnet, but {} was got.".format(args.net))
+            # Create RUnet Module
+            return KDNetModule(
+                tea_net=tea_net,
+                stu_net=stu_net,
+                loss_type=args.model_loss_type,
+                max_epochs=args.model_max_epochs,
+                lr=args.model_lr,
+                weight_decay=args.model_weight_decay,
+                tmap_prf_func=self.prf_func,
+                tmap_patch_rate=args.log_tmap_patch_rate,
+                tmap_heated_thresh=args.log_tmap_heated_thresh,
+                log_images_frame_idx=args.log_images_frame_idx,
+                log_images_freq=args.log_images_freq
+            )
+        else:
+            raise ValueError("``--net`` must be one of 'runet', 'cunet', 'resunet', 'swtnet', \
+                             'casnet' and 'kdnet' but {} was got.".format(args.net))
 
 if __name__ == "__main__":
-    args = build_args()
-    run(args)
+
+    seed = 3407
+    randomness(seed=seed)
+
+    args, cfgs = build_args()
+    runner = FastmrtRunner(args, cfgs)
+    runner.run()

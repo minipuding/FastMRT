@@ -1,13 +1,11 @@
 # casnet超参数配置文件
 
 DATA:
-  DATA_FORMAT: 'RF'           # Fixed Param
-  BATCH_SIZE: 32               # Variable Param 01 recommend 16
+  FORMAT: 'RF'           # Fixed Param
+  BATCH_SIZE: 8               # Variable Param 01 recommend 16
   SAMPLING_MODE: 'RANDOM'     # Variable Param 02
   ACCELERATION: 4             # Variable Param 03
   CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
-  RESIZE_SIZE: (112, 112)     # Variable Param 05 recommend 256
-  RESIZE_MODE: 'on_kspace'    # Variable Param 06 recommend 'on_kspace'
 MODEL:
   IN_CHANNELS: 2              # Fixed Param
   OUT_CHANNELS: 2             # Fixed Param
@@ -17,18 +15,23 @@ MODEL:
   RES_CONV_NUM: 5             # Variable Param 10
   DROP_PROB: 0.1              # Variable Param 11
   LEAKYRELU_SLOPE: 0.1        # Variable Param 12
-  LR: 1e-3                    # Variable Param 14
+  LR: 5e-4                    # Variable Param 14
   LR_STEP_SIZE: 40            # Variable Param 15
   LR_GAMMA: 0.1               # Variable Param 16
-  WEIGHT_DECAY: 1e-7          # Variable Param 17
-  MAX_EPOCHS: 150             # Independent Param
+  WEIGHT_DECAY: 0          # Variable Param 17
+  MAX_EPOCHS: 200             # Independent Param
 LOG:
-  LOG_NAME: 'casnet_unet4_wo.resize_only1output_lr1e-3_bs32'     # Independent Param
-  LOG_IMAGES_FRAME_IDX: 5     # Independent Param
-  LOG_IMAGES_FREQ: 50         # Independent Param
+  NAME: 'exp0406-0|debug'     # Independent Param
+  IMAGES_FRAME_IDX: 5     # Independent Param
+  IMAGES_FREQ: 50         # Independent Param
   TMAP_PATCH_RATE: 4          # Independent Param
   TMAP_MAX_TEMP_THRESH: 45    # Independent Param
-  TMAP_ABLATION_THRESH: 43    # Independent Param
-
+  TMAP_HEATED_THRESH: 43    # Independent Param
+AUGS:
+  UNION: True
+  OBJS: []
+  AP_LOGIC: "and"
+  AUGS_LIST: ["crop", "rotate", "blur", "flip"]
+  COMPOSE_NUM: 1
 
 
