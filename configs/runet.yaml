@@ -15,20 +15,23 @@ MODEL:
   LEAKYRELU_SLOPE: 0.1        # Variable Param 10 recommend 0.1
   LR: 5e-4                    # Variable Param 12 recommend 1e-3
   WEIGHT_DECAY: 1e-4          # Variable Param 15 recommend 1e-4
-  LOSS_TYPE: 'decoupled'
+  LOSS_TYPE: 'l1'
   MAX_EPOCHS: 200             # Independent Param
 LOG:
-  NAME: "exp0428-0|loss=decoupled"  # Baseline
+  NAME: "exp0503-1|loss=l1|augs=False|phantom_v5.0"  # Baseline
   IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
   IMAGES_FREQ: 50         # Independent Param
   TMAP_PATCH_RATE: 4          # Independent Param
   TMAP_HEATED_THRESH: 43    # Independent Param
 AUGS:
-  AP_SHUFFLE: False
   UNION: False
   OBJS: []
   AP_LOGIC: "and"
-  LIST: ["crop", "rotate", "blur", "flip"]
+  LIST: 
+    - "crop"
+    - "rotate"
+    - "blur"
+    - "flip"
   COMPOSE_NUM: 1
 
 

@@ -1,4 +1,3 @@
-# r-unet超参数配置文件
 
 DATA:
   FORMAT: 'RF'           # Fixed Param
@@ -9,33 +8,50 @@ DATA:
 MODEL:
   UPSCALE: 1
   IN_CHANNELS: 2
-  IMG_SIZE: [96, 96]
+  IMG_SIZE: 
+    - 96
+    - 96
   PATCH_SIZE: 1
   WINDOW_SIZE: 8
   IMG_RANGE: 1.0
-  DEPTHS: [6, 6, 6, 6, 6, 6]
+  DEPTHS: 
+    - 6
+    - 6
+    - 6
+    - 6
+    - 6
+    - 6
   EMBED_DIM: 180
-  NUM_HEADS: [6, 6, 6, 6, 6, 6]
+  NUM_HEADS: 
+    - 6
+    - 6
+    - 6
+    - 6
+    - 6
+    - 6
   MLP_RATIO: 2.0
   UPSAMPLER: ''
   RESI_CONNECTION: '1conv'
   LR: 2e-4                    # Variable Param 12 recommend 1e-3
   WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
-  LOSS_TYPE: 'l1'
+  LOSS_TYPE: 'decoupled'
   MAX_EPOCHS: 200             # Independent Param
 LOG:
-  NAME: 'exp0427-1|baseline'  # Baseline
+  NAME: 'exp0502-1|loss=decoupled|augs=True'  # Baseline
   IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
   IMAGES_FREQ: 50         # Independent Param
   TMAP_PATCH_RATE: 4          # Independent Param
   TMAP_MAX_TEMP_THRESH: 45    # Independent Param
   TMAP_HEATED_THRESH: 43    # Independent Param
 AUGS:
-  AP_SHUFFLE: False
   UNION: True
   OBJS: []
   AP_LOGIC: "and"
-  LIST: ["crop", "rotate", "blur", "flip"]
+  LIST: 
+    - "crop"
+    - "rotate"
+    - "blur"
+    - "flip"
   COMPOSE_NUM: 1
 
 

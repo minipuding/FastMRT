@@ -1,4 +1,5 @@
-DATA_DIR: '../Datasets/FastMRT Dataset V3.1'
+DATA_DIR: 
+  - '../Datasets/FastMRT Dataset V5.0/phantom'
 PT_DATA_DIR: '../ImageNet/ILSVRC/Data/CLS-LOC/'
 LOG_DIR: './logs/'
 PRF_CONFIG_DIR: './configs/prf.yaml'

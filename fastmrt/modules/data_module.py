@@ -47,7 +47,7 @@ class FastmrtDataModule(pl.LightningDataModule):
             stage: str = 'train',
             transform: Callable = None,
     ) -> DataLoader[Any]:
-        data_path = os.path.join(self.root, stage)
+        data_path = [os.path.join(sub_data_path, stage) for sub_data_path in self.root]
         shuffle = True
 
         # choose transform depend on stage

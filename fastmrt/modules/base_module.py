@@ -105,7 +105,7 @@ class BaseModule(pl.LightningModule):
         train_loss = torch.tensor(0, dtype=torch.float32, device=self.device)
         for log in train_logs:
             train_loss += log["loss"]
-        self.log("loss", train_loss, on_epoch=True, on_step=False)
+        self.log("loss", train_loss / len(train_logs), on_epoch=True, on_step=False)
 
     def validation_epoch_end(self, val_logs: Sequence[Dict]) -> None:
 

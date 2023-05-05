@@ -11,6 +11,7 @@ from typing import (
     Callable,
     Optional,
     Union,
+    List,
 )
 from pathlib import Path
 import os
@@ -25,19 +26,21 @@ class Dataset(torch.utils.data.Dataset):
 
     def __init__(
             self,
-            root: Union[str, Path, os.PathLike],
+            root: Union[str, List[str]],
     ):
         """
         Args:
             root: Paths to the datasets.
         """
-        self.data = []
+        self.data, file_names = [], []
 
         # load 5-D complex64 .h5 dataset
         # [frames, slice, coils, height, width]
-        file_names = os.listdir(root)
+        for data_path in root:
+            file_names += [os.path.join(data_path, name) for name in os.listdir(data_path)]
+            
         for file_name in file_names:
-            header, kspace, tmap_masks = self._load_data(os.path.join(root, file_name))
+            header, kspace, tmap_masks = self._load_data(file_name)
             self.data += [(header, kspace, tmap_masks, file_name)]  # load 5-D data
 
     def __getitem__(self, idx : int):
@@ -50,7 +53,8 @@ class Dataset(torch.utils.data.Dataset):
         with h5py.File(file_name, "r") as hf:
             header = dict(hf.attrs)
             kspace = hf["kspace"][()].transpose()
-            tmap_masks = hf["tmap_masks"][()].transpose()
+            tmap_masks = hf["tmap_masks"][()].transpose() \
+                if hf["tmap_masks"][()].shape is not None else None
         return header, kspace, tmap_masks
 
 class SliceDataset(Dataset):
@@ -61,7 +65,7 @@ class SliceDataset(Dataset):
 
     def __init__(
         self,
-        root : Union[str, Path, os.PathLike],
+        root : Union[str, List[str]],
         transform : Optional[Callable] = None,
         ref_idx: int = 0
     ):
@@ -82,7 +86,8 @@ class SliceDataset(Dataset):
         for header, kspace, tmap_masks, file_name in self.data:
             for slice_idx in range(int(header['slices'])):
                 for coil_idx in range(int(header['coils'])):
-                    tmap_mask = np.squeeze(tmap_masks[slice_idx, coil_idx, :, :])
+                    tmap_mask = np.squeeze(tmap_masks[slice_idx, coil_idx, :, :]) \
+                        if tmap_masks is not None else np.ones([header["width"], header["height"]])
                     for frame_idx in range(int(header['frames'])):
                         slice_kspace = np.squeeze(kspace[frame_idx, slice_idx, coil_idx, :, :])     # load current frame
                         slice_kspace_ref = np.squeeze(kspace[ref_idx, slice_idx, coil_idx, :, :])   # load reference frame
@@ -119,7 +124,7 @@ class VolumeDataset(Dataset):
     """
     def __init__(
         self,
-        root : Union[str, Path, os.PathLike],
+        root : Union[str, List[str]],
         transform : Optional[Callable] = None,
         ref_idx: int = 0
     ):

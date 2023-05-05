@@ -4,9 +4,6 @@ setup(
     name='fastmrt',
     version='v0.1.0',
     packages=['fastmrt'],
-    install_requires=[
-        'requires'
-    ],
     author='Sijie Xu',
     author_email='sijie.x@sjtu.edu.cn',
     description='A package for accerating MR thermometry by deep learning.',

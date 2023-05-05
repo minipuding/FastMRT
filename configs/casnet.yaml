@@ -28,7 +28,6 @@ LOG:
   TMAP_MAX_TEMP_THRESH: 45    # Independent Param
   TMAP_HEATED_THRESH: 43    # Independent Param
 AUGS:
-  AP_SHUFFLE: False
   UNION: True
   OBJS: []
   AP_LOGIC: "and"

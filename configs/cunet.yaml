@@ -1,4 +1,3 @@
-# r-unet超参数配置文件
 
 DATA:
   FORMAT: 'CF'           # Fixed Param
@@ -21,15 +20,14 @@ MODEL:
   LOSS_TYPE: 'decoupled'
   MAX_EPOCHS: 200             # Independent Param
 LOG:
-  NAME: 'exp0428-1|loss=decoupled|bs8'  # Independent Param
+  NAME: 'exp0501-1|loss=decoupled|augs=True|bs8'  # Independent Param
   IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
   IMAGES_FREQ: 50         # Independent Param
   TMAP_PATCH_RATE: 4          # Independent Param
   TMAP_MAX_TEMP_THRESH: 45    # Independent Param
   TMAP_HEATED_THRESH: 43    # Independent Param
 AUGS:
-  AP_SHUFFLE: False
-  UNION: False
+  UNION: True
   OBJS: []
   AP_LOGIC: "and"
   LIST: ["crop", "rotate", "blur", "flip"]

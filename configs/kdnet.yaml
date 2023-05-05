@@ -26,7 +26,6 @@ LOG:
   TMAP_PATCH_RATE: 4      
   TMAP_HEATED_THRESH: 43  
 AUGS:
-  AP_SHUFFLE: False
   UNION: True
   OBJS: []
   AP_LOGIC: "and"
