@@ -20,8 +20,7 @@ class ComplexAugs:
      Args:
          height: int, image height, default is fastmrt dataset height, 96
          width: int, image width, default is fastmrt dataset width, 96
-         union: bool, if True, apply the same augmentations on both amplitude and phase like general augs,
-                default is False
+         ca_rate: float, complex augments rate. That's the probability of triggering complex enhancement.
          objs: list[str], objects that augs applied on, only choose from `amp` and `phs` that represent amplitude and phs, respectively.
          ap_logic: str, amplitude and phase augs logic, if "and", the augs would be applied sequentially in amplitude and phase,
                  if "or", the augs would be applied one of amplitude and phase, default is ["amp", "phs"].
@@ -37,13 +36,16 @@ class ComplexAugs:
     def __init__(self,
                  height: int=96,
                  width: int=96,
-                 union: bool = False,
+                 ca_rate: float=0.,
                  objs=None,
                  ap_logic: str="and",
                  augs_list=None,
                  compose_num=None,
                  crop_scale: tuple[float, float] = (0.7, 1.0),
                  blur_limit: Union[int, tuple[int, int]] = (1, 5),):
+        
+        # assert complex augment rate
+        assert 0. <= ca_rate <= 1., f"`ca_rate` must be between 0. and 1. but got {ca_rate}."
 
         # assert objects
         if objs is None:
@@ -62,7 +64,7 @@ class ComplexAugs:
             assert compose_num <= len(augs_list), f"`compose_num` must be in 0 < compose_num < len(augs_list), but got {compose_num}"
 
         # assignment
-        self.union = union
+        self.ca_rate = ca_rate
         self.objs = objs
         self.ap_logic = ap_logic
         self.augs_list = augs_list
@@ -88,8 +90,9 @@ class ComplexAugs:
         """
         with temp_seed(seed=seed):
             if len(self.augs_list) == 0:
+                Warning("The length os `augs_list` is 0, so the ComplexAugs would not be applied.")
                 return sample, tmap_mask
-            elif self.union is True:
+            elif random.random() > self.ca_rate:  # Have a `1-ca_rate`` probability of using a normal augments.
                 sample = cn2rn(sample)
                 sample_mask = np.concatenate((sample, tmap_mask[np.newaxis, :]), axis=0).transpose([1, 2, 0])
                 sample_mask = self.apply_augs(sample_mask).transpose([-1, 0, 1])
@@ -111,6 +114,8 @@ class ComplexAugs:
                     phs = rn2cn(phs_mask[:2])
                     tmap_mask = phs_mask[-1]
                 sample = amp * phs
+            else:
+                raise ValueError("The `objs` should not be empty when `ca_rate` is over 0.")
         return sample, tmap_mask
 
     def apply_augs(self, x):

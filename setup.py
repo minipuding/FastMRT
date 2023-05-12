@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='fastmrt',
-    version='v0.1.0',
+    version='0.1.0',
     packages=['fastmrt'],
     author='Sijie Xu',
     author_email='sijie.x@sjtu.edu.cn',

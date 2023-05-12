@@ -32,16 +32,13 @@ class Dataset(torch.utils.data.Dataset):
         Args:
             root: Paths to the datasets.
         """
-        self.data, file_names = [], []
+        self.data = []
 
         # load 5-D complex64 .h5 dataset
         # [frames, slice, coils, height, width]
-        for data_path in root:
-            file_names += [os.path.join(data_path, name) for name in os.listdir(data_path)]
-            
-        for file_name in file_names:
-            header, kspace, tmap_masks = self._load_data(file_name)
-            self.data += [(header, kspace, tmap_masks, file_name)]  # load 5-D data
+        for sub_root in root:
+            for path, _, file_names in os.walk(sub_root):
+                self.data += [self._load_data(os.path.join(path, file_name)) for file_name in file_names]  # load 5-D data
 
     def __getitem__(self, idx : int):
         return self.data[idx]
@@ -55,7 +52,8 @@ class Dataset(torch.utils.data.Dataset):
             kspace = hf["kspace"][()].transpose()
             tmap_masks = hf["tmap_masks"][()].transpose() \
                 if hf["tmap_masks"][()].shape is not None else None
-        return header, kspace, tmap_masks
+        log_file_name = '_'.join(file_name.split("/")[-4:])
+        return header, kspace, tmap_masks, log_file_name
 
 class SliceDataset(Dataset):
     """

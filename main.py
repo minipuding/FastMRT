@@ -9,7 +9,7 @@ from torchvision.transforms import Compose
 from fastmrt.data.mask import RandomMaskFunc, EquiSpacedMaskFunc, apply_mask
 from fastmrt.data.transforms import FastmrtDataTransform2D
 from fastmrt.data.prf import PrfHeader, PrfFunc
-from fastmrt.data.augs import ComplexAugs
+from fastmrt.data.augs import ComplexAugs, IdentityAugs
 from fastmrt.modules.data_module import FastmrtDataModule
 from fastmrt.modules.model_module import (
     UNetModule, 
@@ -60,6 +60,8 @@ def build_args():
                         help="(int request) gpu(s) index")
     parser.add_argument('-dc', '--dir_config', type=str, default='./configs/dir.yaml',
                         help="(str optional) the directory of config that saves other paths.")
+    parser.add_argument('-os', '--only_source', action='store_true', default=False,
+                        help="(bool optional) only use source datas or use source and diffusion augmented datas.")
     parser.add_argument('-nul', '--no_use_logger', action='store_true', default=False,
                         help="(bool optional) whether using logger.")
 
@@ -132,13 +134,16 @@ class FastmrtRunner:
         ))
 
         # initialize augmentation function
-        self.augs_func = ComplexAugs(
-            union=self.args.augs_union,
-            objs=self.args.augs_objs,
-            ap_logic=self.args.augs_ap_logic,
-            augs_list=self.args.augs_list,
-            compose_num=self.args.augs_compose_num
-        )
+        if args.augs_enabled is False:
+            self.augs_func = IdentityAugs()
+        else:
+            self.augs_func = ComplexAugs(
+                ca_rate=self.args.augs_ca_rate,
+                objs=self.args.augs_objs,
+                ap_logic=self.args.augs_ap_logic,
+                augs_list=self.args.augs_list,
+                compose_num=self.args.augs_compose_num
+            )
 
         # initialize transforms
         self.train_transform = FastmrtDataTransform2D(
@@ -162,11 +167,13 @@ class FastmrtRunner:
         # initialize data module
         self.data_module = FastmrtDataModule(
             root=self.args.data_dir,
+            only_source=args.only_source,
             train_transform=self.train_transform,
             val_transform=self.val_transform,
             test_transform=self.test_transform,
             batch_size=self.args.data_batch_size,
             dataset_type='2D',
+            workers=args.data_workers,
         )
 
         # initialize model module

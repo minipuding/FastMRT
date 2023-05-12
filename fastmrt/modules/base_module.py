@@ -415,20 +415,10 @@ class FastmrtModule(BaseModule):
 
         # to_eval: denormalize (and to real-type data format)
         self.to_eval = lambda x, m, s : ct2rt(denormalize(x, m, s).squeeze()) if torch.is_complex(x) else denormalize(x, m, s).squeeze()
-        
     
     def training_step(self, batch, batch_idx, **kwargs):
 
         return {"loss": self.loss_fn(self.model(batch.input, **kwargs), batch.label)}
-
-    def training_epoch_end(self, train_logs: Sequence[Dict]) -> None:
-
-        train_loss = torch.tensor(0, dtype=torch.float32, device=self.device)
-
-        for log in train_logs:
-            train_loss += log["loss"]
-
-        self.log("loss", train_loss // len(log), on_epoch=True, on_step=False)
 
     def validation_step(self, batch, batch_idx, **kwargs):
 
@@ -488,6 +478,8 @@ class FastmrtModule(BaseModule):
         return F.l1_loss(output, label)
 
     def _decoupled_loss(self, output, label):
+
+        alpha = 2   # phase loss coefficient
         
         # turn to complex data format
         if torch.is_complex(label):
@@ -501,6 +493,6 @@ class FastmrtModule(BaseModule):
         amp_loss = F.l1_loss(output_complex.abs(), label_complex.abs())
 
         # phase loss
-        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * label_complex.abs()).abs().sum(0).mean()
+        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * label_complex.abs()).abs().mean(0).mean()
 
-        return amp_loss + phs_loss / torch.pi
+        return amp_loss + phs_loss * alpha

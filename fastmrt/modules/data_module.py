@@ -13,6 +13,7 @@ class FastmrtDataModule(pl.LightningDataModule):
     def __init__(
             self,
             root: Path,
+            only_source: bool,
             train_transform: Callable,
             val_transform: Callable,
             test_transform: Callable,
@@ -21,9 +22,11 @@ class FastmrtDataModule(pl.LightningDataModule):
             collate_fn=None,
             work_init_fn: Any = None,
             generator: Any = None,
+            workers: int=0,
     ):
         super(FastmrtDataModule, self).__init__()
         self.root = root
+        self.only_source = only_source
         self.train_transform = train_transform
         self.val_transform = val_transform
         self.test_transform = test_transform
@@ -32,6 +35,7 @@ class FastmrtDataModule(pl.LightningDataModule):
         self.collate_fn = collate_fn
         self.work_init_fn = work_init_fn
         self.generator = generator
+        self.workers = workers
 
     def train_dataloader(self):
         return self._create_dataloader(stage='train', transform=self.train_transform)
@@ -47,7 +51,7 @@ class FastmrtDataModule(pl.LightningDataModule):
             stage: str = 'train',
             transform: Callable = None,
     ) -> DataLoader[Any]:
-        data_path = [os.path.join(sub_data_path, stage) for sub_data_path in self.root]
+        data_path = [os.path.join(sub_data_path, stage, self._sub_folder(stage)) for sub_data_path in self.root]
         shuffle = True
 
         # choose transform depend on stage
@@ -82,7 +86,7 @@ class FastmrtDataModule(pl.LightningDataModule):
             dataset=dataset,
             batch_size=self.batch_size,
             shuffle=shuffle,
-            num_workers=6,
+            num_workers=self.workers,
             drop_last=True,
             collate_fn=collate_fn,
             worker_init_fn=self.work_init_fn,
@@ -90,6 +94,12 @@ class FastmrtDataModule(pl.LightningDataModule):
         )
 
         return dataloader
+    
+    def _sub_folder(self, stage: str):
+        if self.only_source is True and stage == 'train':
+            return 'source'
+        else:
+            return ''
 
 
 class FastmrtPretrainDataModule(pl.LightningDataModule):

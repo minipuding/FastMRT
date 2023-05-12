@@ -1,3 +1,6 @@
 *.pyc
 logs/*
 /checkpoints/
+/build/
+/dist/
+/fastmrt.egg-info/
