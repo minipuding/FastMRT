@@ -3,7 +3,9 @@ import pytorch_lightning as pl
 from pytorch_lightning import loggers
 from argparse import ArgumentParser
 import yaml
+from yamlinclude import YamlIncludeConstructor
 import thop
+import os
 from torchvision.transforms import Compose
 
 from fastmrt.data.mask import RandomMaskFunc, EquiSpacedMaskFunc, apply_mask
@@ -11,17 +13,29 @@ from fastmrt.data.transforms import FastmrtDataTransform2D
 from fastmrt.data.prf import PrfHeader, PrfFunc
 from fastmrt.data.augs import ComplexAugs, IdentityAugs
 from fastmrt.modules.data_module import FastmrtDataModule
-from fastmrt.modules.model_module import (
-    UNetModule, 
-    CUNetModule, 
-    ResUNetModule,
-    CasNetModule,
-    SwtNetModule,
-    KDNetModule,
-)
+from fastmrt.modules.model_module import CasNetModule, KDNetModule
+from fastmrt.modules.base_module import FastmrtModule
 from fastmrt.models.runet import Unet
+from fastmrt.models.cunet import ComplexUnet
+from fastmrt.models.resunet import UNet as ResUnet
+from fastmrt.models.casnet import CasNet
+from fastmrt.models.swtnet import SwinIR
+from fastmrt.models.kdnet import KDNet
 from fastmrt.utils.seed import randomness
 from fastmrt.pretrain.transforms import FastmrtPretrainTransform
+
+def inherit_constructor(loader, node):
+    def merge_dict(dict1, dict2):
+        for key in dict2:
+            if key in dict1 and isinstance(dict1[key], dict) and isinstance(dict2[key], dict):
+                merge_dict(dict1[key], dict2[key])
+            else:
+                dict1[key] = dict2[key]
+    
+    kwargs = loader.construct_mapping(node, deep=True)
+    merge = kwargs.pop("_BASE_")
+    merge_dict(merge, kwargs)
+    return merge
 
 # build args
 def build_args():
@@ -46,10 +60,9 @@ def build_args():
         flat_cfgs = flatten_dict(cfgs)
         for key, value in flat_cfgs.items():
             parser.add_argument(f'--{key}', type=type(value), default=value)
-        return parser.parse_args()
+        return parser.parse_args(), flat_cfgs
     
     parser = ArgumentParser()
-    cfgs, log_cfgs = {}, {}
 
     # model choice & load dir config
     parser.add_argument('-n', '--net', type=str, required=True,
@@ -58,7 +71,7 @@ def build_args():
                         help="(str request) One of 'train', 'pre-train', 'fine-tune', 'test'")
     parser.add_argument('-g', '--gpus', type=int, required=False, default=[0], nargs='+',
                         help="(int request) gpu(s) index")
-    parser.add_argument('-dc', '--dir_config', type=str, default='./configs/dir.yaml',
+    parser.add_argument('-cd', '--cfg_dir', type=str, default='./configs',
                         help="(str optional) the directory of config that saves other paths.")
     parser.add_argument('-os', '--only_source', action='store_true', default=False,
                         help="(bool optional) only use source datas or use source and diffusion augmented datas.")
@@ -66,53 +79,29 @@ def build_args():
                         help="(bool optional) whether using logger.")
 
     # load directory config
-    with open(parser.parse_args().dir_config) as fconfig:
-        dir_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
-
-    # load prf config
-    with open(dir_cfg['PRF_CONFIG_DIR']) as fconfig:
-        prf_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
+    core_args = parser.parse_args()
+    YamlIncludeConstructor.add_to_loader_class(loader_class=yaml.FullLoader, base_dir="./configs")
+    yaml.add_constructor("!inherit", inherit_constructor)
 
     # load net config (hypeparameters)
-    if parser.parse_args().net == 'runet':
-        with open(dir_cfg['RUNET_CONFIG_DIR']) as fconfig:
-            net_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
-    elif parser.parse_args().net == 'cunet':
-        with open(dir_cfg['CUNET_CONFIG_DIR']) as fconfig:
-            net_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
-    elif parser.parse_args().net == 'resunet':
-        with open(dir_cfg['RESUNET_CONFIG_DIR']) as fconfig:
-            net_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
-    elif parser.parse_args().net == 'swtnet':
-        with open(dir_cfg['SWTNET_CONFIG_DIR']) as fconfig:
-            net_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
-    elif parser.parse_args().net == 'casnet':
-        with open(dir_cfg['CASNET_CONFIG_DIR']) as fconfig:
-            net_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
-    elif parser.parse_args().net == 'kdnet':
-        with open(dir_cfg['KDNET_CONFIG_DIR']) as fconfig:
-            net_cfg = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
+    cfgs_dir = os.path.join(core_args.cfg_dir, f"{core_args.net}.yaml")
+    assert os.path.exists(cfgs_dir), \
+        f"You try to run `{core_args.net}`, but there is no config file named `{core_args.net}.yaml` on your config directory ({core_args.cfg_dir})"
+    with open(cfgs_dir) as fconfig:
+        cfgs = yaml.load(fconfig.read(), Loader=yaml.FullLoader)
 
     # collect all configs and turn to args
-    cfgs.update(dir_cfg)
-    cfgs.update(prf_cfg)
-    cfgs.update(net_cfg)
-    args = parse_args_from_dict(cfgs, parser)
-
-    # collect configs requires to log
-    log_cfgs.update(net_cfg)
-    log_cfgs.update(dict(DATA_DIR=cfgs["DATA_DIR"]))
-    log_cfgs = flatten_dict(log_cfgs)
+    args, flat_cfgs = parse_args_from_dict(cfgs, parser)
 
     # turn str to float for some special params
-    args.model_lr = log_cfgs["model_lr"] = float(args.model_lr)
-    args.model_weight_decay = log_cfgs["model_weight_decay"] = float(args.model_weight_decay)
+    args.model_lr = flat_cfgs["model_lr"] = float(args.model_lr)
+    args.model_weight_decay = flat_cfgs["model_weight_decay"] = float(args.model_weight_decay)
 
-    return args, log_cfgs
+    return args, flat_cfgs, cfgs
 
 class FastmrtRunner:
 
-    def __init__(self, args, log_cfgs) -> None:
+    def __init__(self, args, log_cfgs, source_cfgs) -> None:
 
         self.args = args
 
@@ -127,10 +116,10 @@ class FastmrtRunner:
         # initialize prf function
         self.prf_func = PrfFunc(
             prf_header=PrfHeader(
-                B0=self.args.b0,
-                gamma=self.args.gamma,
-                alpha=self.args.alpha,
-                TE=self.args.te,
+                B0=self.args.prf_b0,
+                gamma=self.args.prf_gamma,
+                alpha=self.args.prf_alpha,
+                TE=self.args.prf_te,
         ))
 
         # initialize augmentation function
@@ -190,12 +179,14 @@ class FastmrtRunner:
             flops, params = thop.profile(self.model_module.model, (pesudo_img, ))
             log_cfgs["FLOPs"] = "%.2fG" % (flops * 1e-9)
             log_cfgs["params"] = "%.2fM" % (params * 1e-6)
+
+            # save configs to wandb
             self.logger.log_hyperparams(log_cfgs)
         else:
             
             self.logger = False
 
-        # Create Traner
+        # create Traner
         self.trainer = pl.Trainer(
             gpus=args.gpus,
             strategy='ddp' if len(args.gpus) > 1 else None,
@@ -204,67 +195,57 @@ class FastmrtRunner:
             logger=self.logger
         )
 
+        # save source configs
+        with open("last_config.yaml", 'w') as f:
+            yaml.dump(source_cfgs, f)
+
     def run(self):
         self.trainer.fit(self.model_module, datamodule=self.data_module)
+    
+    def _get_model(self, args):
 
-    def _init_model_module(self, args):
         if args.net == 'runet':
-            return UNetModule(
+            return Unet(
                 in_channels=args.model_in_channels,
                 out_channels=args.model_out_channels,
                 base_channels=args.model_base_channels,
                 level_num=args.model_level_num,
                 drop_prob=args.model_drop_prob,
-                loss_type=args.model_loss_type,
-                max_epochs=args.model_max_epochs,
-                lr=args.model_lr,
-                weight_decay=args.model_weight_decay,
-                tmap_prf_func=self.prf_func,
-                tmap_patch_rate=args.log_tmap_patch_rate,
-                tmap_heated_thresh=args.log_tmap_heated_thresh,
-                log_images_frame_idx=args.log_images_frame_idx,
-                log_images_freq=args.log_images_freq
+                leakyrelu_slope=args.model_leakyrelu_slope,
             )
         elif args.net == 'cunet':
-            return CUNetModule(
+            return ComplexUnet(
                 in_channels=args.model_in_channels,
                 out_channels=args.model_out_channels,
                 base_channels=args.model_base_channels,
                 level_num=args.model_level_num,
                 drop_prob=args.model_drop_prob,
-                loss_type=args.model_loss_type,
-                max_epochs=args.model_max_epochs,
-                lr=args.model_lr,
-                weight_decay=args.model_weight_decay,
-                tmap_prf_func=self.prf_func,
-                tmap_patch_rate=args.log_tmap_patch_rate,
-                tmap_heated_thresh=args.log_tmap_heated_thresh,
-                log_images_frame_idx=args.log_images_frame_idx,
-                log_images_freq=args.log_images_freq
             )
         elif args.net == 'resunet':
-            return ResUNetModule(
+            return ResUnet(
                 in_channels=args.model_in_channels,
                 out_channels=args.model_out_channels,
                 base_channels=args.model_base_channels,
                 ch_mult=args.model_ch_mult,
                 attn=args.model_attn,
-                num_res_blocks=args.model_num_res_block,
+                num_res_blocks=args.model_num_res_blocks,
                 drop_prob=args.model_drop_prob,
-                loss_type=args.model_loss_type,
-                max_epochs=args.model_max_epochs,
-                lr=args.model_lr,
-                weight_decay=args.model_weight_decay,
-                tmap_prf_func=self.prf_func,
-                tmap_patch_rate=args.log_tmap_patch_rate,
-                tmap_heated_thresh=args.log_tmap_heated_thresh,
-                log_images_frame_idx=args.log_images_frame_idx,
-                log_images_freq=args.log_images_freq
+            )
+        elif args.net == 'casnet':
+            return CasNet(
+                in_channels=args.model_in_channels,
+                out_channels=args.model_out_channels,
+                base_channels=args.model_base_channels,
+                res_block_num=args.model_res_block_num,
+                res_conv_ksize=args.model_res_conv_ksize,
+                res_conv_num=args.model_res_conv_num,
+                drop_prob=args.model_drop_prob,
+                leakyrelu_slope=args.model_leakyrelu_slope,
             )
         elif args.net == 'swtnet':
-            return SwtNetModule(
+            return SwinIR(
                 upscale=args.model_upscale,
-                in_channels=args.model_in_channels,
+                in_chans=args.model_in_channels,
                 img_size=args.model_img_size,
                 patch_size=args.model_patch_size,
                 window_size=args.model_window_size,
@@ -274,64 +255,34 @@ class FastmrtRunner:
                 num_heads=args.model_num_heads,
                 mlp_ratio=args.model_mlp_ratio,
                 upsampler=args.model_upsampler,
-                resi_connection=args.model_resi_connection,
-                loss_type=args.model_loss_type,
-                max_epochs=args.model_max_epochs,
-                lr=args.model_lr,
-                weight_decay=args.model_weight_decay,
-                tmap_prf_func=self.prf_func,
-                tmap_patch_rate=args.log_tmap_patch_rate,
-                tmap_heated_thresh=args.log_tmap_heated_thresh,
-                log_images_frame_idx=args.log_images_frame_idx,
-                log_images_freq=args.log_images_freq
-            )
-        elif args.net == 'casnet':
-            return CasNetModule(
-                in_channels=args.model_in_channels,
-                out_channels=args.model_out_channels,
-                base_channels=args.model_base_channels,
-                res_block_num=args.model_res_block_num,
-                res_conv_ksize=args.model_res_conv_ksize,
-                res_conv_num=args.model_res_conv_num,
-                drop_prob=args.model_drop_prob,
-                leakyrelu_slope=args.model_leakyrelu_slope,
-                loss_type=args.model_loss_type,
-                max_epochs=args.model_max_epochs,
-                lr=args.model_lr,
-                weight_decay=args.model_weight_decay,
-                tmap_prf_func=self.prf_func,
-                tmap_patch_rate=args.log_tmap_patch_rate,
-                tmap_heated_thresh=args.log_tmap_heated_thresh,
-                log_images_frame_idx=args.log_images_frame_idx,
-                log_images_freq=args.log_images_freq
-            )
-        elif args.net == 'kdnet':
-            tea_net = Unet(
-                in_channels=args.model_in_channels,
-                out_channels=args.model_out_channels,
-                base_channels=args.model_base_channels_tea
-            )
-            module_state_dict = torch.load(args.model_tea_dir)["state_dict"]
-            model_state_dict = tea_net.state_dict()
-            del_list=[]
-            for key in module_state_dict:
-                if 'total' in key:
-                    del_list.append(key)
-            for key in del_list:
-                module_state_dict.pop(key, None)
-            for model_key, module_key in zip(model_state_dict, module_state_dict):
-                model_state_dict[model_key] = module_state_dict[module_key]
-            tea_net.load_state_dict(model_state_dict)
-            stu_net = Unet(
-                in_channels=args.model_in_channels,
-                out_channels=args.model_out_channels,
-                base_channels=args.model_base_channels_stu
+                resi_connection=args.model_resi_connection
             )
 
-            # Create RUnet Module
+    def _init_model_module(self, args):
+        
+        if args.kd_enabled == True:
+
+            # construct student net and teacher net
+            stu_net = self._get_model(args)
+            if args.net == "swtnet":
+                args.model_num_heads = [num * args.kd_channels_ratio for num in args.model_num_heads]
+            else:
+                args.model_base_channels *= args.kd_channels_ratio
+            tea_net = self._get_model(args)
+
+            # load teacher state dict
+            model_state_dict = torch.load(args.kd_tea_dir)["state_dict"]
+            tea_state_dict = {}
+            for key, value in model_state_dict.items():
+                if 'total' in key:
+                    continue
+                new_key = key[len("model."):]
+                tea_state_dict[new_key] = value
+            tea_net.load_state_dict(tea_state_dict)
+
+            # create module with knowledge distillation
             return KDNetModule(
-                tea_net=tea_net,
-                stu_net=stu_net,
+                model=KDNet(tea_net, stu_net),
                 loss_type=args.model_loss_type,
                 max_epochs=args.model_max_epochs,
                 lr=args.model_lr,
@@ -342,15 +293,39 @@ class FastmrtRunner:
                 log_images_frame_idx=args.log_images_frame_idx,
                 log_images_freq=args.log_images_freq
             )
+        
+        if args.net == 'casnet':
+            return CasNetModule(
+                model=self._get_model(args),
+                loss_type=args.model_loss_type,
+                max_epochs=args.model_max_epochs,
+                lr=args.model_lr,
+                weight_decay=args.model_weight_decay,
+                tmap_prf_func=self.prf_func,
+                tmap_patch_rate=args.log_tmap_patch_rate,
+                tmap_heated_thresh=args.log_tmap_heated_thresh,
+                log_images_frame_idx=args.log_images_frame_idx,
+                log_images_freq=args.log_images_freq
+            )            
         else:
-            raise ValueError("``--net`` must be one of 'runet', 'cunet', 'resunet', 'swtnet', \
-                             'casnet' and 'kdnet' but {} was got.".format(args.net))
+            return FastmrtModule(
+                model=self._get_model(args),
+                loss_type=args.model_loss_type,
+                max_epochs=args.model_max_epochs,
+                lr=args.model_lr,
+                weight_decay=args.model_weight_decay,
+                tmap_prf_func=self.prf_func,
+                tmap_patch_rate=args.log_tmap_patch_rate,
+                tmap_heated_thresh=args.log_tmap_heated_thresh,
+                log_images_frame_idx=args.log_images_frame_idx,
+                log_images_freq=args.log_images_freq
+            )
 
 if __name__ == "__main__":
 
     seed = 3407
     randomness(seed=seed)
 
-    args, cfgs = build_args()
-    runner = FastmrtRunner(args, cfgs)
+    args, flat_cfgs, source_cfgs = build_args()
+    runner = FastmrtRunner(args, flat_cfgs, source_cfgs)
     runner.run()

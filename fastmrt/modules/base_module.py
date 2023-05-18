@@ -77,6 +77,7 @@ class BaseModule(pl.LightningModule):
 
     def __init__(
             self,
+            model: nn.Module,
             tmap_prf_func: PrfFunc = None,
             tmap_patch_rate: int = 4,
             tmap_heated_thresh = 43,
@@ -97,7 +98,7 @@ class BaseModule(pl.LightningModule):
         self.is_log_image_metrics = is_log_image_metrics
         self.is_log_tmap_metrics = is_log_tmap_metrics
         self.is_log_media_metrics = is_log_media_metrics
-        self.model: nn.Module
+        self.model = model
 
     def training_epoch_end(self, train_logs: Sequence[Dict]) -> None:
         """log train loss after training epoch end.

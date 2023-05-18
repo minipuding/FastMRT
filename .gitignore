@@ -4,3 +4,4 @@ logs/*
 /build/
 /dist/
 /fastmrt.egg-info/
+last_config.yaml

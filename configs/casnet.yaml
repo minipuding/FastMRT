@@ -1,14 +1,6 @@
-# casnet超参数配置文件
-
-DATA:
-  FORMAT: 'RF'           # Fixed Param
-  BATCH_SIZE: 8               # Variable Param 01 recommend 16
-  SAMPLING_MODE: 'RANDOM'     # Variable Param 02
-  ACCELERATION: 4             # Variable Param 03
-  CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
+!inherit
+_BASE_: !include _base_.yaml
 MODEL:
-  IN_CHANNELS: 2              # Fixed Param
-  OUT_CHANNELS: 2             # Fixed Param
   BASE_CHANNELS: 32          # Variable Param 07
   RES_BLOCK_NUM: 5            # Variable Param 08
   RES_CONV_KSIZE: 3           # Variable Param 09
@@ -19,19 +11,13 @@ MODEL:
   LR_STEP_SIZE: 40            # Variable Param 15
   LR_GAMMA: 0.1               # Variable Param 16
   WEIGHT_DECAY: 0          # Variable Param 17
-  MAX_EPOCHS: 200             # Independent Param
+  LOSS_TYPE: 'l1'
 LOG:
-  NAME: 'exp0406-0|debug'     # Independent Param
-  IMAGES_FRAME_IDX: 5     # Independent Param
-  IMAGES_FREQ: 50         # Independent Param
-  TMAP_PATCH_RATE: 4          # Independent Param
-  TMAP_MAX_TEMP_THRESH: 45    # Independent Param
-  TMAP_HEATED_THRESH: 43    # Independent Param
+  NAME: "exp0516-4|exvivo_sa|ca_rate=False|w/o_kd|loss=l1"  # Baseline
 AUGS:
-  UNION: True
-  OBJS: []
-  AP_LOGIC: "and"
-  AUGS_LIST: ["crop", "rotate", "blur", "flip"]
-  COMPOSE_NUM: 1
-
+  ENABLED: False
+  CA_RATE: 0.3
+KD:
+  ENABLED: false
+  TEA_DIR: "/home/sxu/SJTU/FastMRT/fastMRT/Codes/logs/AUGS/30ycyzjc/checkpoints/epoch=199-step=101400.ckpt"
 
