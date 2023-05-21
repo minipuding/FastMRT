@@ -23,6 +23,7 @@ from typing import Any, List
 import matplotlib
 import wandb
 import time
+import pandas
 
 matplotlib.use('agg')
 
@@ -112,7 +113,8 @@ class BaseModule(pl.LightningModule):
 
         # save image(amplitude) metrics
         if self.is_log_image_metrics is True:
-            self._log_image_metrics(val_logs, stage='val')
+            image_metrics = self._log_image_metrics(val_logs)
+            self._log_scalar(image_metrics, stage="val")
 
         # save temperature maps metrics
         if self.is_log_tmap_metrics is True:
@@ -124,7 +126,8 @@ class BaseModule(pl.LightningModule):
                                                         rt2ct(log["label_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
                         recon_tmaps += [self.tmap_prf_func(rt2ct(log["output"][sample_idx]),
                                                         rt2ct(log["output_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
-            self._log_tmap_metrics(full_tmaps, recon_tmaps)
+            tmap_metrics = self._log_tmap_metrics(full_tmaps, recon_tmaps)
+            self._log_scalar(tmap_metrics)
 
         # save log medias (images & temperature maps)
         if self.is_log_media_metrics is True:
@@ -134,7 +137,7 @@ class BaseModule(pl.LightningModule):
     def test_epoch_end(self, outputs) -> None:
 
         # save image(amplitude) metrics
-        self._log_image_metrics(outputs, stage='val')
+        image_metrics = self._log_image_metrics(outputs)
 
         # save temperature maps metrics
         full_tmaps, recon_tmaps = [], []
@@ -145,7 +148,15 @@ class BaseModule(pl.LightningModule):
                                                     rt2ct(log["label_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
                     recon_tmaps += [self.tmap_prf_func(rt2ct(log["output"][sample_idx]),
                                                     rt2ct(log["output_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
-        self._log_tmap_metrics(full_tmaps, recon_tmaps)
+        
+        tmap_metrics = self._log_tmap_metrics(full_tmaps, recon_tmaps)
+
+        # save metrics to table
+        all_metrics = dict(Experiment_Names=self.logger.experiment.name)
+        all_metrics.update(tmap_metrics)
+        all_metrics.update(image_metrics)
+        df_metrics = pandas.DataFrame({"metrics": all_metrics}).transpose()
+        self.logger.experiment.log({"test_metrics": wandb.Table(dataframe=df_metrics)})
 
     def on_train_end(self) -> None:
         t = time.localtime()
@@ -153,7 +164,7 @@ class BaseModule(pl.LightningModule):
         torch.save(self.model.state_dict(), os.path.join(self.logger.save_dir, self.logger.name,
                                                          f"model_epoch_{self.current_epoch}_t{ts}.pth"))
 
-    def _log_image_metrics(self, logs: Sequence[Dict], stage: str = "val"):
+    def _log_image_metrics(self, logs: Sequence[Dict]):
 
         # initialize scales
         mse = torch.tensor(0, dtype=torch.float32, device=self.device)
@@ -168,13 +179,14 @@ class BaseModule(pl.LightningModule):
             mse += FastmrtMetrics.mse(log["output"], log["label"])
             ssim += FastmrtMetrics.ssim(log["output"], log["label"])
             psnr += FastmrtMetrics.psnr(log["output"], log["label"])
-            loss += log[f"{stage}_loss"]
+            loss += log[f"loss"]
 
-        # save validation logs of metrics and loss
-        self.log(f"{stage}_mse", mse / batch_num)
-        self.log(f"{stage}_ssim", ssim / batch_num)
-        self.log(f"{stage}_psnr", psnr / batch_num)
-        self.log(f"{stage}_loss", loss / batch_num)
+        return {
+            'mse': mse / batch_num,
+            'ssim': ssim / batch_num,
+            'psnr': psnr / batch_num,
+            'loss': loss / batch_num,
+        }
 
     def _log_tmap_metrics(
             self,
@@ -222,11 +234,13 @@ class BaseModule(pl.LightningModule):
             _, _, _, ba_error_std, _ = FastmrtMetrics.bland_altman(patch_recon_tmap, patch_full_tmap)
             patch_error_std += ba_error_std
 
-        # add temperature maps metrics to log
-        self.log("T_error", tmap_error / tmap_num)
-        self.log("T_patch_rmse", patch_rmse / tmap_num)
-        self.log("T_heated_area_dice", heated_area_dice / dice_calc_num)
-        self.log("T_patch_error_std", patch_error_std / tmap_num)
+
+        return {
+            'T_error': tmap_error / tmap_num,
+            'T_patch_rmse': patch_rmse / tmap_num,
+            'T_heated_area_dice': heated_area_dice / dice_calc_num,
+            'T_patch_error_std': patch_error_std / tmap_num
+        }
 
     def _log_medias(
             self,
@@ -362,6 +376,12 @@ class BaseModule(pl.LightningModule):
         self.logger.experiment.log({fig_name: wandb.Image(plt)})
         plt.close(fig)
     
+    def _log_scalar(self, metrics: Dict, stage: str="") -> None:
+        for key, val in metrics.items():
+            if stage:
+                key = f"{stage}_{key}"
+            self.log(key, val)
+
     @staticmethod
     def _vmin_max(image, vmin, vmax):
         return (image - image.min()) / (vmax - vmin)
@@ -442,15 +462,15 @@ class FastmrtModule(BaseModule):
             "label_ref": self.to_eval(batch.label_ref, mean, std),
             "output_ref": self.to_eval(output_ref, mean, std),
             "tmap_mask": batch.tmap_mask,
-            "val_loss": val_loss,
+            "loss": val_loss,
             "file_name": batch.metainfo['file_name'],
             "frame_idx": batch.metainfo['frame_idx'],
             "slice_idx": batch.metainfo['slice_idx'],
             "coil_idx": batch.metainfo['coil_idx'],
         }
 
-    def test_step(self, batch, **kwargs):
-        self.validation_step(batch, None, **kwargs)
+    def test_step(self, *args, **kwargs):
+        return self.validation_step(*args, **kwargs)
 
     def predict_step(self, batch):
         output = self.model(batch.input)

@@ -10,16 +10,15 @@ MODEL:
   ATTN: 
     - 3
   NUM_RES_BLOCKS: 2
-  DROP_PROB: 0.0              # Variable Param 09 毫无影响
+  DROP_PROB: 0.1              # Variable Param 09 毫无影响
   LR: 5e-4                    # Variable Param 12 recommend 1e-3
-  WEIGHT_DECAY: 1e-4          # Variable Param 15 recommend 1e-4
+  WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
   LOSS_TYPE: 'l1'
 LOG:
-  NAME: 'exp0515-5|phantom_os|ca_rate=0.9|w/o_kd|loss=l1'  # Baseline
+  NAME: 'exp0518-7|phantom_os|ca_rate=False|w/_kd_gamma1.0|loss=l1'  # Baseline
 AUGS:
   ENABLED: false
   CA_RATE: 0.3
 KD:
-  ENABLED: false
+  ENABLED: true
   TEA_DIR: "/home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/RESUNET/ofee0sma/checkpoints/epoch=199-step=299400.ckpt"
-

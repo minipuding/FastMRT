@@ -68,7 +68,7 @@ def build_args():
     parser.add_argument('-n', '--net', type=str, required=True,
                         help="(str request) One of 'r-unet', 'c-unet', 'casnet', 'gannet', 'complexnet'")
     parser.add_argument('-s', '--stage', type=str, required=True,
-                        help="(str request) One of 'train', 'pre-train', 'fine-tune', 'test'")
+                        help="(str request) One of 'train' and 'test'")
     parser.add_argument('-g', '--gpus', type=int, required=False, default=[0], nargs='+',
                         help="(int request) gpu(s) index")
     parser.add_argument('-cd', '--cfg_dir', type=str, default='./configs',
@@ -200,7 +200,15 @@ class FastmrtRunner:
             yaml.dump(source_cfgs, f)
 
     def run(self):
-        self.trainer.fit(self.model_module, datamodule=self.data_module)
+        if self.args.stage == 'train':
+            self.trainer.fit(self.model_module, datamodule=self.data_module)
+        elif self.args.stage == 'train-test':
+            self.trainer.fit(self.model_module, datamodule=self.data_module)
+            self.trainer.test(self.model_module, datamodule=self.data_module)
+        elif self.args.stage == 'test':
+            ckpt = torch.load(args.model_ckpt_dir)
+            self.model_module.load_state_dict(ckpt["state_dict"], strict=False)
+            self.trainer.test(self.model_module, datamodule=self.data_module)
     
     def _get_model(self, args):
 

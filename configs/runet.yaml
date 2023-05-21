@@ -1,5 +1,9 @@
 !inherit
 _BASE_: !include _base_.yaml
+DATA:
+  DIR:
+      - '../Datasets/FastMRT Dataset V5.0/exvivo'
+  ACCELERATION: 2
 MODEL:
   BASE_CHANNELS: 32
   LEVEL_NUM: 4
@@ -8,15 +12,12 @@ MODEL:
   LR: 5e-4
   WEIGHT_DECAY: 1e-4
   LOSS_TYPE: 'l1'
+  CKPT_DIR: "/home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/RUNET/3aio63kq/checkpoints/epoch=199-step=32400.ckpt"
 LOG:
-  NAME: "exp0518-3|phantom_os|ca_rate=False|w/_kd_gamma1.0|loss=l1"  # Baseline
+  NAME: "exp0521-3|runet|train-test|exvivo|2X"  # Baseline
 AUGS:
   ENABLED: false
   CA_RATE: 0.3
 KD:
-  ENABLED: true
+  ENABLED: false
   TEA_DIR: "/home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/RUNET/1aa1ldav/checkpoints/epoch=199-step=299400.ckpt"
-
-
-
-

@@ -80,7 +80,7 @@ class KDNetModule(FastmrtModule):
     def _l1_loss(self, tea_output, stu_output, label):
 
         # setting loss weight decay
-        gamma = 1.0
+        gamma = 0.4
         beta = max((1 - self.current_epoch / self.max_epochs) * gamma, 0)
 
         # calculate losses
@@ -93,13 +93,20 @@ class KDNetModule(FastmrtModule):
 
     def _decoupled_loss(self, tea_output, stu_output, label):
         # setting loss weight decay
-        gamma1, gamma2 = 0.7, 0.7
+        alpha = 2
+        gamma1, gamma2 = 0.4, 0.4
         beta1 = max((1 - self.current_epoch / self.max_epochs) * gamma1, 0)
         beta2 = max((1 - self.current_epoch / self.max_epochs) * gamma2, 0)
 
-        tea_output_complex = rt2ct(tea_output.clone().detach())
-        stu_output_complex = rt2ct(stu_output)
-        label_complex = rt2ct(label)
+        # turn to complex data format
+        if torch.is_complex(label):
+            tea_output_complex = tea_output.clone().detach()
+            stu_output_complex = stu_output
+            label_complex = label
+        else:
+            tea_output_complex = rt2ct(tea_output.clone().detach())
+            stu_output_complex = rt2ct(stu_output)
+            label_complex = rt2ct(label)
 
         # amplitude loss
         stu_amp_loss = F.l1_loss(stu_output_complex.abs(), label_complex.abs())
@@ -107,17 +114,17 @@ class KDNetModule(FastmrtModule):
         soft_amp_loss = F.l1_loss(stu_output_complex.abs(), tea_output_complex.abs())
 
         # phase loss
-        stu_phs_loss = (torch.angle(stu_output_complex * torch.conj(label_complex)) * label_complex.abs()).abs().sum(0).mean()
-        tea_phs_loss = (torch.angle(tea_output_complex * torch.conj(label_complex)) * label_complex.abs()).abs().sum(0).mean()
-        soft_phs_loss = (torch.angle(stu_output_complex * torch.conj(tea_output_complex)) * tea_output_complex.abs()).abs().sum(0).mean()
+        stu_phs_loss = (torch.angle(stu_output_complex * torch.conj(label_complex)) * label_complex.abs()).abs().mean(0).mean()
+        tea_phs_loss = (torch.angle(tea_output_complex * torch.conj(label_complex)) * label_complex.abs()).abs().mean(0).mean()
+        soft_phs_loss = (torch.angle(stu_output_complex * torch.conj(tea_output_complex)) * tea_output_complex.abs()).abs().mean(0).mean()
 
         # merging
         amp_loss = (1 - beta1) * stu_amp_loss + beta1 * soft_amp_loss
         phs_loss = (1 - beta2) * stu_phs_loss + beta2 * soft_phs_loss
 
-        tea_loss = tea_amp_loss + tea_phs_loss / torch.pi
-        stu_loss = stu_amp_loss + stu_phs_loss / torch.pi
-        soft_label_loss = soft_amp_loss + soft_phs_loss / torch.pi
-        kd_loss = amp_loss + phs_loss / torch.pi
+        tea_loss = tea_amp_loss + tea_phs_loss * alpha
+        stu_loss = stu_amp_loss + stu_phs_loss * alpha
+        soft_label_loss = soft_amp_loss + soft_phs_loss * alpha
+        kd_loss = amp_loss + phs_loss *alpha
 
         return tea_loss, stu_loss, soft_label_loss, kd_loss

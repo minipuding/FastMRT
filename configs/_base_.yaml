@@ -11,6 +11,7 @@ MODEL:
   IN_CHANNELS: 2
   OUT_CHANNELS: 2
   MAX_EPOCHS: 200
+  CKPT_DIR: ""
 LOG:
   DIR: './logs/'
   IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
