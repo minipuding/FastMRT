@@ -206,13 +206,17 @@ class FastmrtRunner:
             self.trainer.fit(self.model_module, datamodule=self.data_module)
             self.trainer.test(self.model_module, datamodule=self.data_module)
         elif self.args.stage == 'test':
-            ckpt = torch.load(args.model_ckpt_dir)
-            self.model_module.load_state_dict(ckpt["state_dict"], strict=False)
+            if args.net != 'zf':  # zero filled should not load state dict
+                ckpt = torch.load(args.test_ckpt_dir)
+                self.model_module.load_state_dict(ckpt["state_dict"], strict=False)
             self.trainer.test(self.model_module, datamodule=self.data_module)
     
     def _get_model(self, args):
 
-        if args.net == 'runet':
+        if args.net == 'zf':
+            return torch.nn.Identity()
+        
+        elif args.net == 'runet':
             return Unet(
                 in_channels=args.model_in_channels,
                 out_channels=args.model_out_channels,

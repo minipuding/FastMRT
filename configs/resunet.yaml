@@ -1,5 +1,9 @@
 !inherit
 _BASE_: !include _base_.yaml
+DATA:
+  DIR:
+      - ../Datasets/FastMRT Dataset V5.0/exvivo
+  ACCELERATION: 2
 MODEL:
   BASE_CHANNELS: 32           # Variable Param 07 recommend 32
   CH_MULT: 
@@ -13,12 +17,14 @@ MODEL:
   DROP_PROB: 0.1              # Variable Param 09 毫无影响
   LR: 5e-4                    # Variable Param 12 recommend 1e-3
   WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
-  LOSS_TYPE: 'l1'
+  LOSS_TYPE: decoupled
 LOG:
-  NAME: 'exp0518-7|phantom_os|ca_rate=False|w/_kd_gamma1.0|loss=l1'  # Baseline
+  NAME: exp0617-13|resunet+mim|test|exvivo|2X  # Baseline
 AUGS:
-  ENABLED: false
+  ENABLED: true
   CA_RATE: 0.3
 KD:
   ENABLED: true
-  TEA_DIR: "/home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/RESUNET/ofee0sma/checkpoints/epoch=199-step=299400.ckpt"
+  TEA_DIR: /home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/RESUNET/1kcimc67/checkpoints/epoch=199-step=160400.ckpt
+TEST:
+  CKPT_DIR: /home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/RESUNET/1dbrzi40/checkpoints/epoch=199-step=160400.ckpt

@@ -70,7 +70,7 @@ class KDNetModule(FastmrtModule):
             "label_ref": self.to_eval(batch.label_ref, mean, std),
             "output_ref": self.to_eval(output_ref, mean, std),
             "tmap_mask": batch.tmap_mask,
-            "val_loss": val_loss,
+            "loss": val_loss,
             "file_name": batch.metainfo['file_name'],
             "frame_idx": batch.metainfo['frame_idx'],
             "slice_idx": batch.metainfo['slice_idx'],

@@ -36,6 +36,8 @@ class Dataset(torch.utils.data.Dataset):
 
         # load 5-D complex64 .h5 dataset
         # [frames, slice, coils, height, width]
+        if isinstance(root, str):
+            root = [root]
         for sub_root in root:
             for path, _, file_names in os.walk(sub_root):
                 self.data += [self._load_data(os.path.join(path, file_name)) for file_name in file_names]  # load 5-D data

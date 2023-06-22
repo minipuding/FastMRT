@@ -1,7 +1,10 @@
 !inherit
 _BASE_: !include _base_.yaml
 DATA:
-  FORMAT: 'CF'
+  FORMAT: CF
+  DIR:
+      - ../Datasets/FastMRT Dataset V5.0/phantom
+  ACCELERATION: 2
 MODEL:
   IN_CHANNELS: 1              # Fixed Param
   OUT_CHANNELS: 1             # Fixed Param
@@ -14,15 +17,17 @@ MODEL:
   LR_STEP_SIZE: 40            # Variable Param 13
   LR_GAMMA: 0.1               # Variable Param 14
   WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
-  LOSS_TYPE: 'decoupled'
+  LOSS_TYPE: l1
 LOG:
-  NAME: "exp0516-4|exvivo_sa|ca_rate=False|w/o_kd|loss=l1"  # Baseline
+  NAME: exp0607-0|cunet|train-test|phantom|2X  # Baseline
 AUGS:
-  ENABLED: False
+  ENABLED: false
   CA_RATE: 0.3
 KD:
   ENABLED: false
-  TEA_DIR: "/home/sxu/SJTU/FastMRT/fastMRT/Codes/logs/AUGS/30ycyzjc/checkpoints/epoch=199-step=101400.ckpt"
+  TEA_DIR: /home/sxu/SJTU/FastMRT/fastMRT/Codes/logs/AUGS/30ycyzjc/checkpoints/epoch=199-step=101400.ckpt
+TEST:
+  CKPT_DIR: /home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/CUNET/20mdd7vc/checkpoints/epoch=199-step=32400.ckpt
 
 
 

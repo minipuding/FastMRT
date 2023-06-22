@@ -1,5 +1,9 @@
 !inherit
 _BASE_: !include _base_.yaml
+DATA:
+  DIR:
+      - ../Datasets/FastMRT Dataset V5.0/exvivo
+  ACCELERATION: 2
 MODEL:
   UPSCALE: 1
   IN_CHANNELS: 2
@@ -26,18 +30,20 @@ MODEL:
     - 6
   MLP_RATIO: 2.0
   UPSAMPLER: ''
-  RESI_CONNECTION: '1conv'
+  RESI_CONNECTION: 1conv
   LR: 2e-4                    # Variable Param 12 recommend 1e-3
   WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
-  LOSS_TYPE: 'l1'
+  LOSS_TYPE: l1
 LOG:
-  NAME: "exp0516-4|exvivo_sa|ca_rate=False|w/o_kd|loss=l1"
+  NAME: exp0617-5|swtnet|test|exvivo|2X
 AUGS:
-  ENABLED: False
+  ENABLED: false
   CA_RATE: 0.3
 KD:
   ENABLED: false
-  TEA_DIR: "/home/sxu/SJTU/FastMRT/fastMRT/Codes/logs/AUGS/30ycyzjc/checkpoints/epoch=199-step=101400.ckpt"
+  TEA_DIR: ''
+TEST:
+  CKPT_DIR: /home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/SWTNET/wegjpwch/checkpoints/epoch=199-step=32400.ckpt
 
 
 

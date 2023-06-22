@@ -1,9 +1,9 @@
 DATA:
   DIR:
-    - '../Datasets/FastMRT Dataset V5.0/phantom'
-  FORMAT: 'RF'
+    - ../Datasets/FastMRT Dataset V5.0/phantom
+  FORMAT: RF
   BATCH_SIZE: 8
-  SAMPLING_MODE: 'EQUISPACED'
+  SAMPLING_MODE: EQUISPACED
   ACCELERATION: 4
   CENTER_FRACTION: 0.15
   WORKERS: 4
@@ -11,9 +11,11 @@ MODEL:
   IN_CHANNELS: 2
   OUT_CHANNELS: 2
   MAX_EPOCHS: 200
-  CKPT_DIR: ""
+  LR: 5e-4
+  WEIGHT_DECAY: 1e-4
+  LOSS_TYPE: l1
 LOG:
-  DIR: './logs/'
+  DIR: ./logs/
   IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
   IMAGES_FREQ: 50         # Independent Param
   TMAP_PATCH_RATE: 4          # Independent Param
@@ -24,17 +26,20 @@ AUGS:
   OBJS: 
     - amp
     - phs
-  AP_LOGIC: "and"
+  AP_LOGIC: and
   LIST: 
-    - "crop"
-    - "rotate"
-    - "blur"
-    - "flip"
+    - crop
+    - rotate
+    - blur
+    - flip
   COMPOSE_NUM: 1
 KD:
+  ENABLED: false
   CHANNELS_RATIO: 4
 PRF:
   B0: 3                       # Fixed Param
   GAMMA: 42.576               # Fixed Param
   ALPHA: 0.01                 # Fixed Param
   TE: 12                      # Fixed Param
+TEST: 
+  CKPT_DIR: ""
