@@ -16,7 +16,7 @@ from fastmrt.utils.metrics import FastmrtMetrics
 from fastmrt.utils.normalize import denormalize
 from fastmrt.utils.trans import real_tensor_to_complex_tensor as rt2ct
 from fastmrt.utils.trans import complex_tensor_to_real_tensor as ct2rt
-from fastmrt.utils.vis import draw_tmap
+from fastmrt.utils.vis import draw_tmap, draw_bland_altman_fig, draw_linear_regression_fig
 from fastmrt.data.prf import PrfFunc
 import torch
 import torch.nn.functional as F
@@ -350,8 +350,10 @@ class BaseModule(pl.LightningModule):
             patch_recon_tmap = recon_tmap[(tmap_height - patch_height) // 2: tmap_height - (tmap_height - patch_height) // 2,
                               (tmap_width - patch_width) // 2: tmap_width - (tmap_width - patch_width) // 2]
             ba_mean, ba_error, ba_error_mean, ba_error_std, _ = FastmrtMetrics.bland_altman(patch_recon_tmap, patch_full_tmap)
-            self._log_bland_altman_fig(f"{section_name}/I_bland_altman", ba_mean, ba_error, ba_error_mean, ba_error_std)
-            self._log_linear_regression_fig(f"{section_name}/J_linear_regression", patch_recon_tmap, patch_full_tmap)
+            with draw_bland_altman_fig(ba_mean, ba_error, ba_error_mean, ba_error_std) as plt:
+                self.logger.experiment.log({f"{section_name}/I_bland_altman": wandb.Image(plt)})
+            with draw_linear_regression_fig(patch_recon_tmap, patch_full_tmap) as plt:
+                self.logger.experiment.log({f"{section_name}/J_linear_regression": wandb.Image(plt)})
 
 
     def _log_tmap(self, tmap: torch.Tensor, fig_name: str, vmin: Any=0.0, vmax: Any=70.0) -> None:
@@ -359,56 +361,6 @@ class BaseModule(pl.LightningModule):
         plt.imshow(tmap.cpu(), cmap='jet', vmin=vmin, vmax=vmax)
         plt.colorbar()
         self.logger.experiment.log({fig_name: plt})
-        plt.close(fig)
-
-    def _log_bland_altman_fig(self, fig_name: str, ba_mean, ba_error, ba_error_mean, ba_error_std):
-
-        # calculate datas
-        mean_error = ba_error_mean.cpu().numpy()
-        loa_upper_limit = ba_error_mean.cpu().numpy() + 1.96 * ba_error_std.cpu().numpy()
-        loa_lower_limit = ba_error_mean.cpu().numpy() - 1.96 * ba_error_std.cpu().numpy()
-
-        # start plot
-        text_start = ba_mean.cpu().numpy().min()
-        fig = plt.figure(fig_name)
-        plt.scatter(ba_mean.cpu().numpy(), ba_error.cpu().numpy())
-        plt.axhline(mean_error, color='gray', linestyle='-')
-        plt.axhline(loa_upper_limit, color='red', linestyle='--')
-        plt.axhline(loa_lower_limit, color='red', linestyle='--')
-        plt.text(text_start, mean_error, "mean: {:.3f}".format(mean_error))
-        plt.text(text_start, loa_upper_limit, "upper limit: {:.3f}".format(loa_upper_limit))
-        plt.text(text_start, loa_lower_limit, "lower limit: {:.3f}".format(loa_lower_limit))
-        plt.xlabel("Mean of Recon and Full Tmap Patches (℃)")
-        plt.ylabel("Difference (℃)")
-        plt.title("Bland-Altman Analysis")
-
-        # save to log
-        self.logger.experiment.log({fig_name: wandb.Image(plt)})
-        plt.close(fig)
-
-    def _log_linear_regression_fig(self, fig_name: str,  patch_recon_tmap, patch_full_tmap):
-
-        # calculate datas
-        data_x = patch_recon_tmap.flatten().cpu().numpy()
-        data_y = patch_full_tmap.flatten().cpu().numpy()
-        [k, b] = np.polyfit(data_x, data_y, deg=1)
-        ref_x = np.linspace(np.min(data_x), np.max(data_x), 10)
-        ref_y = ref_x
-        fit_x = ref_x
-        fit_y = k * fit_x + b
-
-        # start plot
-        fig = plt.figure(fig_name)
-        plt.plot(data_x, data_y, '.')
-        plt.plot(ref_x, ref_y, color="red", linestyle="--")
-        plt.plot(fit_x, fit_y, color="blue", linestyle="-")
-        plt.text(ref_x[7], ref_y[4], "y={:.3f}x+{:.3f}".format(k, b))
-        plt.xlabel("Temperature of Recon Tmap (℃)")
-        plt.ylabel("Temperature of Full Tmap (℃)")
-        plt.title("Linear Regression Analysis")
-
-        # save to log
-        self.logger.experiment.log({fig_name: wandb.Image(plt)})
         plt.close(fig)
     
     def _log_scalar(self, metrics: Dict, stage: str="") -> None:
@@ -535,7 +487,7 @@ class FastmrtModule(BaseModule):
 
     def _decoupled_loss(self, output, label):
 
-        alpha = 2   # phase loss coefficient
+        alpha = 2.4   # phase loss coefficient
         
         # turn to complex data format
         if torch.is_complex(label):
