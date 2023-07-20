@@ -1,14 +1,10 @@
-# casnet超参数配置文件
-
+!inherit
+_BASE_: !include _base_.yaml
 DATA:
-  FORMAT: 'RF'           # Fixed Param
-  BATCH_SIZE: 8               # Variable Param 01 recommend 16
-  SAMPLING_MODE: 'RANDOM'     # Variable Param 02
-  ACCELERATION: 4             # Variable Param 03
-  CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
+  DIR:
+      - ../Datasets/FastMRT Dataset V5.0/exvivo
+  ACCELERATION: 2
 MODEL:
-  IN_CHANNELS: 2              # Fixed Param
-  OUT_CHANNELS: 2             # Fixed Param
   BASE_CHANNELS: 32          # Variable Param 07
   RES_BLOCK_NUM: 5            # Variable Param 08
   RES_CONV_KSIZE: 3           # Variable Param 09
@@ -19,19 +15,15 @@ MODEL:
   LR_STEP_SIZE: 40            # Variable Param 15
   LR_GAMMA: 0.1               # Variable Param 16
   WEIGHT_DECAY: 0          # Variable Param 17
-  MAX_EPOCHS: 200             # Independent Param
+  LOSS_TYPE: l1
 LOG:
-  NAME: 'exp0406-0|debug'     # Independent Param
-  IMAGES_FRAME_IDX: 5     # Independent Param
-  IMAGES_FREQ: 50         # Independent Param
-  TMAP_PATCH_RATE: 4          # Independent Param
-  TMAP_MAX_TEMP_THRESH: 45    # Independent Param
-  TMAP_HEATED_THRESH: 43    # Independent Param
+  NAME: exp0617-3|casnet|test|exvivo|2X  # Baseline
 AUGS:
-  UNION: True
-  OBJS: []
-  AP_LOGIC: "and"
-  AUGS_LIST: ["crop", "rotate", "blur", "flip"]
-  COMPOSE_NUM: 1
-
+  ENABLED: false
+  CA_RATE: 0.3
+KD:
+  ENABLED: false
+  TEA_DIR: ''
+TEST:
+  CKPT_DIR: /home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/CASNET/2lc4c08j/checkpoints/epoch=199-step=32400.ckpt
 

@@ -71,6 +71,5 @@ class FastmrtMetrics:
         ba_error = pred.flatten() - gt.flatten()
         ba_error_mean = ba_error.mean()
         ba_error_std = ba_error.std()
-        ba_out_loa = torch.sum((ba_error > ba_error_mean + 1.96 * ba_error_std) | \
-                               (ba_error < ba_error_mean - 1.96 * ba_error_std)) / ba_mean.shape[0]
-        return ba_mean, ba_error, ba_error_mean, ba_error_std, ba_out_loa
+        ba_error_mae = ba_error.abs().mean()
+        return ba_mean, ba_error, ba_error_mean, ba_error_std, ba_error_mae

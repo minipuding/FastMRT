@@ -1,10 +1,10 @@
-
+!inherit
+_BASE_: !include _base_.yaml
 DATA:
-  FORMAT: 'CF'           # Fixed Param
-  BATCH_SIZE: 8               # Variable Param 01 recommend 16
-  SAMPLING_MODE: 'EQUISPACED'     # Variable Param 02
-  ACCELERATION: 4             # Variable Param 03
-  CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
+  FORMAT: CF
+  DIR:
+      - ../Datasets/FastMRT Dataset V5.0/phantom
+  ACCELERATION: 2
 MODEL:
   IN_CHANNELS: 1              # Fixed Param
   OUT_CHANNELS: 1             # Fixed Param
@@ -17,22 +17,17 @@ MODEL:
   LR_STEP_SIZE: 40            # Variable Param 13
   LR_GAMMA: 0.1               # Variable Param 14
   WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
-  LOSS_TYPE: 'decoupled'
-  MAX_EPOCHS: 200             # Independent Param
+  LOSS_TYPE: l1
 LOG:
-  NAME: 'exp0501-1|loss=decoupled|augs=True|bs8'  # Independent Param
-  IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
-  IMAGES_FREQ: 50         # Independent Param
-  TMAP_PATCH_RATE: 4          # Independent Param
-  TMAP_MAX_TEMP_THRESH: 45    # Independent Param
-  TMAP_HEATED_THRESH: 43    # Independent Param
+  NAME: exp0607-0|cunet|train-test|phantom|2X  # Baseline
 AUGS:
-  UNION: True
-  OBJS: []
-  AP_LOGIC: "and"
-  LIST: ["crop", "rotate", "blur", "flip"]
-  COMPOSE_NUM: 1
-
+  ENABLED: false
+  CA_RATE: 0.3
+KD:
+  ENABLED: false
+  TEA_DIR: /home/sxu/SJTU/FastMRT/fastMRT/Codes/logs/AUGS/30ycyzjc/checkpoints/epoch=199-step=101400.ckpt
+TEST:
+  CKPT_DIR: /home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/CUNET/20mdd7vc/checkpoints/epoch=199-step=32400.ckpt
 
 
 

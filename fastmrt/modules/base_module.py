@@ -11,10 +11,12 @@ from typing import Dict, Sequence
 
 from torch import nn
 
+from fastmrt.models.cunet import ComplexUnet
 from fastmrt.utils.metrics import FastmrtMetrics
 from fastmrt.utils.normalize import denormalize
 from fastmrt.utils.trans import real_tensor_to_complex_tensor as rt2ct
 from fastmrt.utils.trans import complex_tensor_to_real_tensor as ct2rt
+from fastmrt.utils.vis import draw_tmap, draw_bland_altman_fig, draw_linear_regression_fig
 from fastmrt.data.prf import PrfFunc
 import torch
 import torch.nn.functional as F
@@ -23,6 +25,7 @@ from typing import Any, List
 import matplotlib
 import wandb
 import time
+import pandas
 
 matplotlib.use('agg')
 
@@ -70,6 +73,7 @@ class BaseModule(pl.LightningModule):
             the sequences are 9 in length). Default is 5.
         log_images_freq: How many epochs logging images. Default is 50.
         device: The device for calculating metrics.
+        enable_logger: Whether to calculate all metrics and save logs.
         is_log_image_metrics: Whether to calculate amplitude metrics and save logs.
         is_log_tmap_metrics: Whether to calculate temperature maps metrics and save logs.
         is_log_media_metrics: Whether to show medias to logs.
@@ -77,6 +81,7 @@ class BaseModule(pl.LightningModule):
 
     def __init__(
             self,
+            model: nn.Module,
             tmap_prf_func: PrfFunc = None,
             tmap_patch_rate: int = 4,
             tmap_heated_thresh = 43,
@@ -97,7 +102,7 @@ class BaseModule(pl.LightningModule):
         self.is_log_image_metrics = is_log_image_metrics
         self.is_log_tmap_metrics = is_log_tmap_metrics
         self.is_log_media_metrics = is_log_media_metrics
-        self.model: nn.Module
+        self.model = model
 
     def training_epoch_end(self, train_logs: Sequence[Dict]) -> None:
         """log train loss after training epoch end.
@@ -111,7 +116,8 @@ class BaseModule(pl.LightningModule):
 
         # save image(amplitude) metrics
         if self.is_log_image_metrics is True:
-            self._log_image_metrics(val_logs, stage='val')
+            image_metrics = self._calc_image_metrics(val_logs)
+            self._log_scalar(image_metrics, stage="val")
 
         # save temperature maps metrics
         if self.is_log_tmap_metrics is True:
@@ -123,7 +129,8 @@ class BaseModule(pl.LightningModule):
                                                         rt2ct(log["label_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
                         recon_tmaps += [self.tmap_prf_func(rt2ct(log["output"][sample_idx]),
                                                         rt2ct(log["output_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
-            self._log_tmap_metrics(full_tmaps, recon_tmaps)
+            tmap_metrics = self._calc_tmap_metrics(full_tmaps, recon_tmaps)
+            self._log_scalar(tmap_metrics)
 
         # save log medias (images & temperature maps)
         if self.is_log_media_metrics is True:
@@ -132,11 +139,11 @@ class BaseModule(pl.LightningModule):
     
     def test_epoch_end(self, outputs) -> None:
 
-        # save image(amplitude) metrics
-        self._log_image_metrics(outputs, stage='val')
+        # calculate image(amplitude) metrics
+        image_metrics = self._calc_image_metrics(outputs)
 
-        # save temperature maps metrics
-        full_tmaps, recon_tmaps = [], []
+        # calculate temperature maps metrics
+        full_tmaps, recon_tmaps, file_names = [], [], []
         for log in outputs:
             for sample_idx in range(log["input"].shape[0]):
                 if log["frame_idx"][sample_idx] > 0: # we only focus on temperature maps after first frame.
@@ -144,15 +151,55 @@ class BaseModule(pl.LightningModule):
                                                     rt2ct(log["label_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
                     recon_tmaps += [self.tmap_prf_func(rt2ct(log["output"][sample_idx]),
                                                     rt2ct(log["output_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
-        self._log_tmap_metrics(full_tmaps, recon_tmaps)
+                    
+                    file_names += [f"{log['file_name'][sample_idx]}_" \
+                                  f"f{log['frame_idx'][sample_idx]:02d}" \
+                                  f"s{log['slice_idx'][sample_idx]}" \
+                                  f"c{log['coil_idx'][sample_idx]}"]
+        
+        tmap_metrics = self._calc_tmap_metrics(full_tmaps, recon_tmaps)
+
+        # save cost time
+        self.to("cpu")
+        pesudo_input = torch.ones_like(log["input"][0]).unsqueeze(0).cpu()  # batch_size=1
+        if isinstance(self.model, ComplexUnet):
+            pesudo_input = torch.ones((1, 1, log["input"].shape[-2], log["input"].shape[-1])) + 1j
+        loop_times = 1000  # hack: for calculating average time
+        start_time = time.time()
+        for _ in range(loop_times):
+            self.model(pesudo_input)
+        end_time = time.time()
+        cost_metrics = {"cost_time(s)": (end_time - start_time) / loop_times}
+
+        # save metrics to table
+        if self.logger is not None:
+            all_metrics = dict(Experiment_Names=self.logger.experiment.name)
+            all_metrics.update(tmap_metrics)
+            all_metrics.update(image_metrics)
+            all_metrics.update(cost_metrics)
+            df_metrics = pandas.DataFrame({"metrics": all_metrics}).transpose()
+            self.logger.experiment.log({"test_metrics": wandb.Table(dataframe=df_metrics)})
+
+        # save medias
+        save_root = os.path.join(self.logger.save_dir, self.logger.name, self.logger.experiment.id, "medias")
+        os.makedirs(save_root, exist_ok=True)
+        for full_tmap, recon_tmap, file_name in zip(full_tmaps, recon_tmaps, file_names):
+            save_dir = os.path.join(save_root, file_name)
+            os.makedirs(save_dir, exist_ok=True)
+            np.save(os.path.join(save_dir, "full_tmap"), full_tmap.cpu().numpy())
+            np.save(os.path.join(save_dir, "recon_tmap"), recon_tmap.cpu().numpy())
+            with draw_tmap(full_tmap) as plt:
+                plt.savefig(os.path.join(save_dir, "full_tmap.png"))
+            with draw_tmap(recon_tmap) as plt:
+                plt.savefig(os.path.join(save_dir, "recon_tmap.png"))    
 
     def on_train_end(self) -> None:
         t = time.localtime()
         ts = f"{t.tm_year}{t.tm_mon:02d}{t.tm_mday:02d}_{t.tm_hour:02d}{t.tm_sec:02d}{t.tm_yday:02d}"
-        torch.save(self.model.state_dict(), os.path.join(self.logger.save_dir, self.logger.name,
+        torch.save(self.model.state_dict(), os.path.join(self.logger.save_dir, self.logger.name, self.logger.experiment.id,
                                                          f"model_epoch_{self.current_epoch}_t{ts}.pth"))
 
-    def _log_image_metrics(self, logs: Sequence[Dict], stage: str = "val"):
+    def _calc_image_metrics(self, logs: Sequence[Dict]):
 
         # initialize scales
         mse = torch.tensor(0, dtype=torch.float32, device=self.device)
@@ -167,15 +214,16 @@ class BaseModule(pl.LightningModule):
             mse += FastmrtMetrics.mse(log["output"], log["label"])
             ssim += FastmrtMetrics.ssim(log["output"], log["label"])
             psnr += FastmrtMetrics.psnr(log["output"], log["label"])
-            loss += log[f"{stage}_loss"]
+            loss += log[f"loss"]
 
-        # save validation logs of metrics and loss
-        self.log(f"{stage}_mse", mse / batch_num)
-        self.log(f"{stage}_ssim", ssim / batch_num)
-        self.log(f"{stage}_psnr", psnr / batch_num)
-        self.log(f"{stage}_loss", loss / batch_num)
+        return {
+            'mse': mse / batch_num,
+            'ssim': ssim / batch_num,
+            'psnr': psnr / batch_num,
+            'loss': loss / batch_num,
+        }
 
-    def _log_tmap_metrics(
+    def _calc_tmap_metrics(
             self,
             full_tmaps: List,
             recon_tmaps: List
@@ -185,7 +233,7 @@ class BaseModule(pl.LightningModule):
 
         # init metrics
         tmap_error = torch.tensor(0, dtype=torch.float32, device=self.device)
-        patch_rmse = torch.tensor(0, dtype=torch.float32, device=self.device)
+        patch_mse = torch.tensor(0, dtype=torch.float32, device=self.device)
         heated_area_dice = torch.tensor(0, dtype=torch.float32, device=self.device)
         patch_error_std = torch.tensor(0, dtype=torch.float32, device=self.device)
 
@@ -208,7 +256,7 @@ class BaseModule(pl.LightningModule):
                                         (tmap_width - patch_width) // 2: tmap_width - (tmap_width - patch_width) // 2]
             patch_recon_tmap = recon_tmap[(tmap_height - patch_height) // 2: tmap_height - (tmap_height - patch_height) // 2,
                                           (tmap_width - patch_width) // 2: tmap_width - (tmap_width - patch_width) // 2]
-            patch_rmse += FastmrtMetrics.mse(patch_recon_tmap.unsqueeze(0), patch_full_tmap.unsqueeze(0))
+            patch_mse += FastmrtMetrics.mse(patch_recon_tmap.unsqueeze(0), patch_full_tmap.unsqueeze(0))
 
             # metric 3: dice coefficient of heated areas.
             area_full_tmap = (patch_full_tmap > self.tmap_heated_thresh).type(torch.FloatTensor)
@@ -221,11 +269,13 @@ class BaseModule(pl.LightningModule):
             _, _, _, ba_error_std, _ = FastmrtMetrics.bland_altman(patch_recon_tmap, patch_full_tmap)
             patch_error_std += ba_error_std
 
-        # add temperature maps metrics to log
-        self.log("T_error", tmap_error / tmap_num)
-        self.log("T_patch_rmse", patch_rmse / tmap_num)
-        self.log("T_heated_area_dice", heated_area_dice / dice_calc_num)
-        self.log("T_patch_error_std", patch_error_std / tmap_num)
+
+        return {
+            'T_error': tmap_error / tmap_num,
+            'T_patch_rmse': torch.sqrt(patch_mse / tmap_num),
+            'T_heated_area_dice': heated_area_dice / dice_calc_num,
+            'T_patch_error_std': patch_error_std / tmap_num
+        }
 
     def _log_medias(
             self,
@@ -250,7 +300,7 @@ class BaseModule(pl.LightningModule):
             # obtain section name
             section_name = f"{prefix}_" \
                            f"{logs[batch_idx]['file_name'][sample_idx]}_" \
-                           f"f{self.log_images_frame_idx}" \
+                           f"f{self.log_images_frame_idx:02d}" \
                            f"s{logs[batch_idx]['slice_idx'][sample_idx]}" \
                            f"c{logs[batch_idx]['coil_idx'][sample_idx]}"
 
@@ -300,8 +350,10 @@ class BaseModule(pl.LightningModule):
             patch_recon_tmap = recon_tmap[(tmap_height - patch_height) // 2: tmap_height - (tmap_height - patch_height) // 2,
                               (tmap_width - patch_width) // 2: tmap_width - (tmap_width - patch_width) // 2]
             ba_mean, ba_error, ba_error_mean, ba_error_std, _ = FastmrtMetrics.bland_altman(patch_recon_tmap, patch_full_tmap)
-            self._log_bland_altman_fig(f"{section_name}/I_bland_altman", ba_mean, ba_error, ba_error_mean, ba_error_std)
-            self._log_linear_regression_fig(f"{section_name}/J_linear_regression", patch_recon_tmap, patch_full_tmap)
+            with draw_bland_altman_fig(ba_mean, ba_error, ba_error_mean, ba_error_std) as plt:
+                self.logger.experiment.log({f"{section_name}/I_bland_altman": wandb.Image(plt)})
+            with draw_linear_regression_fig(patch_recon_tmap, patch_full_tmap) as plt:
+                self.logger.experiment.log({f"{section_name}/J_linear_regression": wandb.Image(plt)})
 
 
     def _log_tmap(self, tmap: torch.Tensor, fig_name: str, vmin: Any=0.0, vmax: Any=70.0) -> None:
@@ -310,57 +362,13 @@ class BaseModule(pl.LightningModule):
         plt.colorbar()
         self.logger.experiment.log({fig_name: plt})
         plt.close(fig)
-
-    def _log_bland_altman_fig(self, fig_name: str, ba_mean, ba_error, ba_error_mean, ba_error_std):
-
-        # calculate datas
-        mean_error = ba_error_mean.cpu().numpy()
-        loa_upper_limit = ba_error_mean.cpu().numpy() + 1.96 * ba_error_std.cpu().numpy()
-        loa_lower_limit = ba_error_mean.cpu().numpy() - 1.96 * ba_error_std.cpu().numpy()
-
-        # start plot
-        text_start = ba_mean.cpu().numpy().min()
-        fig = plt.figure(fig_name)
-        plt.scatter(ba_mean.cpu().numpy(), ba_error.cpu().numpy())
-        plt.axhline(mean_error, color='gray', linestyle='-')
-        plt.axhline(loa_upper_limit, color='red', linestyle='--')
-        plt.axhline(loa_lower_limit, color='red', linestyle='--')
-        plt.text(text_start, mean_error, "mean: {:.3f}".format(mean_error))
-        plt.text(text_start, loa_upper_limit, "upper limit: {:.3f}".format(loa_upper_limit))
-        plt.text(text_start, loa_lower_limit, "lower limit: {:.3f}".format(loa_lower_limit))
-        plt.xlabel("Mean of Recon and Full Tmap Patches (℃)")
-        plt.ylabel("Difference (℃)")
-        plt.title("Bland-Altman Analysis")
-
-        # save to log
-        self.logger.experiment.log({fig_name: wandb.Image(plt)})
-        plt.close(fig)
-
-    def _log_linear_regression_fig(self, fig_name: str,  patch_recon_tmap, patch_full_tmap):
-
-        # calculate datas
-        data_x = patch_recon_tmap.flatten().cpu().numpy()
-        data_y = patch_full_tmap.flatten().cpu().numpy()
-        [k, b] = np.polyfit(data_x, data_y, deg=1)
-        ref_x = np.linspace(np.min(data_x), np.max(data_x), 10)
-        ref_y = ref_x
-        fit_x = ref_x
-        fit_y = k * fit_x + b
-
-        # start plot
-        fig = plt.figure(fig_name)
-        plt.plot(data_x, data_y, '.')
-        plt.plot(ref_x, ref_y, color="red", linestyle="--")
-        plt.plot(fit_x, fit_y, color="blue", linestyle="-")
-        plt.text(ref_x[7], ref_y[4], "y={:.3f}x+{:.3f}".format(k, b))
-        plt.xlabel("Temperature of Recon Tmap (℃)")
-        plt.ylabel("Temperature of Full Tmap (℃)")
-        plt.title("Linear Regression Analysis")
-
-        # save to log
-        self.logger.experiment.log({fig_name: wandb.Image(plt)})
-        plt.close(fig)
     
+    def _log_scalar(self, metrics: Dict, stage: str="") -> None:
+        for key, val in metrics.items():
+            if stage:
+                key = f"{stage}_{key}"
+            self.log(key, val)
+
     @staticmethod
     def _vmin_max(image, vmin, vmax):
         return (image - image.min()) / (vmax - vmin)
@@ -415,20 +423,10 @@ class FastmrtModule(BaseModule):
 
         # to_eval: denormalize (and to real-type data format)
         self.to_eval = lambda x, m, s : ct2rt(denormalize(x, m, s).squeeze()) if torch.is_complex(x) else denormalize(x, m, s).squeeze()
-        
     
     def training_step(self, batch, batch_idx, **kwargs):
 
         return {"loss": self.loss_fn(self.model(batch.input, **kwargs), batch.label)}
-
-    def training_epoch_end(self, train_logs: Sequence[Dict]) -> None:
-
-        train_loss = torch.tensor(0, dtype=torch.float32, device=self.device)
-
-        for log in train_logs:
-            train_loss += log["loss"]
-
-        self.log("loss", train_loss // len(log), on_epoch=True, on_step=False)
 
     def validation_step(self, batch, batch_idx, **kwargs):
 
@@ -451,15 +449,15 @@ class FastmrtModule(BaseModule):
             "label_ref": self.to_eval(batch.label_ref, mean, std),
             "output_ref": self.to_eval(output_ref, mean, std),
             "tmap_mask": batch.tmap_mask,
-            "val_loss": val_loss,
+            "loss": val_loss,
             "file_name": batch.metainfo['file_name'],
             "frame_idx": batch.metainfo['frame_idx'],
             "slice_idx": batch.metainfo['slice_idx'],
             "coil_idx": batch.metainfo['coil_idx'],
         }
 
-    def test_step(self, batch, **kwargs):
-        self.validation_step(batch, None, **kwargs)
+    def test_step(self, *args, **kwargs):
+        return self.validation_step(*args, **kwargs)
 
     def predict_step(self, batch):
         output = self.model(batch.input)
@@ -488,6 +486,8 @@ class FastmrtModule(BaseModule):
         return F.l1_loss(output, label)
 
     def _decoupled_loss(self, output, label):
+
+        alpha = 2   # phase loss coefficient
         
         # turn to complex data format
         if torch.is_complex(label):
@@ -501,6 +501,6 @@ class FastmrtModule(BaseModule):
         amp_loss = F.l1_loss(output_complex.abs(), label_complex.abs())
 
         # phase loss
-        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * label_complex.abs()).abs().sum(0).mean()
+        phs_loss = (torch.angle(output_complex * torch.conj(label_complex)) * label_complex.abs()).abs().mean(0).mean()
 
-        return amp_loss + phs_loss / torch.pi
+        return amp_loss + phs_loss * alpha

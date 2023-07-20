@@ -1,40 +1,24 @@
-# r-unet超参数配置文件
-
+!inherit
+_BASE_: !include _base_.yaml
 DATA:
-  FORMAT: 'RF'           # Fixed Param
-  BATCH_SIZE: 8               # Variable Param 01 recommend 16
-  SAMPLING_MODE: 'EQUISPACED'     # Variable Param 02
-  ACCELERATION: 4             # Variable Param 03
-  CENTER_FRACTION: 0.15        # Variable Param 04 recommend 0.15
+  DIR:
+      - ../Datasets/FastMRT Dataset V5.0/phantom
+  ACCELERATION: 4
 MODEL:
-  IN_CHANNELS: 2              # Fixed Param
-  OUT_CHANNELS: 2             # Fixed Param
-  BASE_CHANNELS: 32           # Variable Param 07 recommend 32
-  LEVEL_NUM: 4                # Variable Param 08 recommend 4
-  DROP_PROB: 0.0              # Variable Param 09 毫无影响
-  LEAKYRELU_SLOPE: 0.1        # Variable Param 10 recommend 0.1
-  LR: 5e-4                    # Variable Param 12 recommend 1e-3
-  WEIGHT_DECAY: 1e-4          # Variable Param 15 recommend 1e-4
-  LOSS_TYPE: 'l1'
-  MAX_EPOCHS: 200             # Independent Param
+  BASE_CHANNELS: 32
+  LEVEL_NUM: 4
+  DROP_PROB: 0.0
+  LEAKYRELU_SLOPE: 0.1
+  LR: 5e-4
+  WEIGHT_DECAY: 1e-4
+  LOSS_TYPE: decoupled
 LOG:
-  NAME: "exp0503-1|loss=l1|augs=False|phantom_v5.0"  # Baseline
-  IMAGES_FRAME_IDX: 5     # Independent Param recommend 3 ~ 7
-  IMAGES_FREQ: 50         # Independent Param
-  TMAP_PATCH_RATE: 4          # Independent Param
-  TMAP_HEATED_THRESH: 43    # Independent Param
+  NAME: exp0626-1|runet|train-test|phantom|4X|dl_alpha=0.8  # Baseline
 AUGS:
-  UNION: False
-  OBJS: []
-  AP_LOGIC: "and"
-  LIST: 
-    - "crop"
-    - "rotate"
-    - "blur"
-    - "flip"
-  COMPOSE_NUM: 1
-
-
-
-
-
+  ENABLED: false
+  CA_RATE: 0.3
+KD:
+  ENABLED: false
+  TEA_DIR: /home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/RUNET/9pqv6r9c/checkpoints/epoch=199-step=160400.ckpt
+TEST:
+  CKPT_DIR: /home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/RUNET/fe8kqif1/checkpoints/epoch=199-step=160400.ckpt

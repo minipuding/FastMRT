@@ -1,3 +1,8 @@
 *.pyc
 logs/*
 /checkpoints/
+/build/
+/dist/
+/fastmrt.egg-info/
+last_config.yaml
+vis.ipynb

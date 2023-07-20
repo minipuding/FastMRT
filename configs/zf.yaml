@@ -1,0 +1,8 @@
+!inherit
+_BASE_: !include _base_.yaml
+DATA:
+  DIR:
+    - ../Datasets/FastMRT Dataset V5.0/exvivo
+  ACCELERATION: 2
+LOG:
+  NAME: exp0617-1|zf|test|exvivo|2X  # zero filled

@@ -211,17 +211,20 @@ class EquiSpacedMaskFunc(MaskFunc):
         # the number we expect to sample as `n`, and the total phase encoding number as `N`.
         # Then, N/n = A, N/((n * (1 - c)) + N * c) = a.
         # Therefore, A = (a * (1 - c)) / (1 - a * c).
-        acceleration = round((1 - self.center_fraction) * self.acceleration
-                             / (1 - self.center_fraction * self.acceleration))
+        acceleration = (1 - self.center_fraction) * self.acceleration \
+                        / (1 - self.center_fraction * self.acceleration)
 
         # set random offset
         if offset is None:
             offset = np.random.randint(0, high=acceleration)
+        
+        eq_masks = np.round(np.arange(offset, num_cols-1, acceleration)).astype(np.int32)
 
         accel_mask = np.zeros(num_cols, dtype=np.float32)
-        accel_mask[offset::acceleration] = 1
+        accel_mask[eq_masks] = 1
 
         return accel_mask
+
 
 def apply_mask(data: np.ndarray,
                mask_func: MaskFunc,
