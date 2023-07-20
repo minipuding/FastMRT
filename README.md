@@ -43,9 +43,7 @@ Other hyperparameters about models and datasets/dataloader can be modified at `.
 
 ## Authors
 
-* **Sijie Xu** - *Initial work* - [PurpleBooth](https://github.com/PurpleBooth)
-
-See also the list of [contributors](https://github.com/your/project/contributors) who participated in this project.
+* **Sijie Xu**
 
 ## License
 
@@ -53,6 +51,5 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 ## Acknowledgments
 
-* Hat tip to anyone whose code was used
-* Inspiration
-* etc
+* [FastMRI](https://fastmri.med.nyu.edu/)
+* [SwinIR](https://github.com/JingyunLiang/SwinIR)

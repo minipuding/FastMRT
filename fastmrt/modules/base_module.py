@@ -487,7 +487,7 @@ class FastmrtModule(BaseModule):
 
     def _decoupled_loss(self, output, label):
 
-        alpha = 2.4   # phase loss coefficient
+        alpha = 2   # phase loss coefficient
         
         # turn to complex data format
         if torch.is_complex(label):
