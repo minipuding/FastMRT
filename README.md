@@ -10,22 +10,26 @@ This repository contains convenient PyTorch data loaders, subsampling functions,
 
 ### Prerequisites
 
-What things you need to install the software and how to install them
+clone fastmrt source code:
 
 ```
 git clone https://github.com/minipuding/FastMRT.git
 cd FastMRT
 ```
 
+prepare environment:
+
+```
+pip install -r requirements.txt
+```
+
 ### Installing
-
-A step by step series of examples that tell you how to get a development env running
-
-Say what the step will be
 
 ```
 pip install -e .
 ```
+
+> The package has been released on PyPI. You can easily install it by running `pip install fastmrt`.
 
 ## Running
 

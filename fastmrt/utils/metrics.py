@@ -29,6 +29,10 @@ class FastmrtMetrics:
                (torch.max(pred, dim=0, keepdim=True)[0] - torch.min(pred, dim=0, keepdim=True)[0])
         gt = (gt - torch.min(gt, dim=0, keepdim=True)[0]) / \
              (torch.max(gt, dim=0, keepdim=True)[0] - torch.min(gt, dim=0, keepdim=True)[0])
+        # pred = (pred - torch.min(pred.reshape([pred.shape[0], -1]), dim=1)[0]) / \
+        #        (torch.max(pred.reshape([pred.shape[0], -1]), dim=1)[0] - torch.min(pred.reshape([pred.shape[0], -1]), dim=1)[0])
+        # gt = (gt - torch.min(gt.reshape([pred.shape[0], -1]), dim=1)[0]) / \
+        #      (torch.max(gt.reshape([pred.shape[0], -1]), dim=1)[0] - torch.min(gt.reshape([pred.shape[0], -1]), dim=1)[0])
         
         for batch_idx in range(pred.shape[0]):
             ssim_metric += pssim.ssim(pred[batch_idx].unsqueeze(0).cuda(), gt[batch_idx].unsqueeze(0).cuda()).item()
