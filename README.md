@@ -2,7 +2,7 @@
 
 In the realm of high-intensity focused ultrasound (HIFU) therapy, magnetic resonance imaging (MRI) is an indispensable tool for monitoring the temperature changes in biological tissue. However, the relatively slow imaging speed of MRI not only exacerbates patient discomfort, but also introduces additional risks during the course of treatment.
 
-Accelerating Magnetic Resonance Imaging (MRI) by acquiring fewer measurements has the potential to reduce medical costs, minimize stress to patients and make MR imaging possible in applications where it is currently prohibitively slow or expensive.
+Accelerating MR by acquiring fewer measurements has the potential to reduce medical costs, minimize stress to patients and make MR imaging possible in applications where it is currently prohibitively slow or expensive.
 
 This repository contains convenient PyTorch data loaders, subsampling functions, evaluation metrics, and reference implementations of simple baseline methods.
 
@@ -51,7 +51,7 @@ Other hyperparameters about models and datasets/dataloader can be modified at `.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
 
 ## Acknowledgments
 

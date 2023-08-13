@@ -1,0 +1,16 @@
+DATA:
+  DIR:
+    - ../../Datasets/FastMRT Dataset V5.0/exvivo
+  SAMPLING_MODE: EQUISPACED
+  ACCELERATION: 2
+  CENTER_FRACTION: 0.15
+LOG:
+  DIR: ./logs/
+  TMAP_PATCH_RATE: 4
+  TMAP_HEATED_THRESH: 43
+PRF:
+  B0: 3
+  GAMMA: 42.576
+  ALPHA: 0.01
+  TE: 12
+BART_DIR: /home/sxu/packages/bart
