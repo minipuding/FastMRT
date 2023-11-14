@@ -1,8 +1,8 @@
 DATA:
   DIR:
-    - ../../Datasets/FastMRT Dataset V5.0/exvivo
+    - ../../Datasets/FastMRT Dataset V5.0/phantom
   SAMPLING_MODE: EQUISPACED
-  ACCELERATION: 2
+  ACCELERATION: 4
   CENTER_FRACTION: 0.15
 LOG:
   DIR: ./logs/

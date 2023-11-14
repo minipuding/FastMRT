@@ -19,7 +19,7 @@ MODEL:
   WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
   LOSS_TYPE: decoupled
 LOG:
-  NAME: exp0617-13|resunet+mim|test|exvivo|2X  # Baseline
+  NAME: exp0831-0|resunet+mim-kd-da|train-test|phantom|4X_wo-pretrain  # Baseline
 AUGS:
   ENABLED: true
   CA_RATE: 0.3

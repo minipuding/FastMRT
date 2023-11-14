@@ -68,7 +68,7 @@ def build_args():
     parser.add_argument('-n', '--net', type=str, required=True,
                         help="(str request) One of 'r-unet', 'c-unet', 'casnet', 'gannet', 'complexnet'")
     parser.add_argument('-s', '--stage', type=str, required=True,
-                        help="(str request) One of 'train' and 'test'")
+                        help="(str request) One of 'train', 'test' and 'train-test'")
     parser.add_argument('-g', '--gpus', type=int, required=False, default=[0], nargs='+',
                         help="(int request) gpu(s) index")
     parser.add_argument('-cd', '--cfg_dir', type=str, default='./configs',

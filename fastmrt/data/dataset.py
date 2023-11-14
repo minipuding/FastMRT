@@ -91,8 +91,10 @@ class SliceDataset(Dataset):
                     for frame_idx in range(int(header['frames'])):
                         slice_kspace = np.squeeze(kspace[frame_idx, slice_idx, coil_idx, :, :])     # load current frame
                         slice_kspace_ref = np.squeeze(kspace[ref_idx, slice_idx, coil_idx, :, :])   # load reference frame
-                        metainfo = dict(file_name=file_name, frame_idx=frame_idx, 
-                                        slice_idx=slice_idx, coil_idx=coil_idx)
+                        metainfo = dict(file_name=file_name, 
+                                        frame_idx=frame_idx, 
+                                        slice_idx=slice_idx, 
+                                        coil_idx=coil_idx)
                         self.slice_data += [{"kspace": slice_kspace,
                                              "kspace_ref": slice_kspace_ref,
                                              "tmap_mask": tmap_mask,

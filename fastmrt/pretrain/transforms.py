@@ -99,7 +99,7 @@ class SimuFocusGaussian(SimuFocus):
         x = np.linspace(0, width - 1, width).astype(np.int32)
         y = np.linspace(0, height - 1, height).astype(np.int32)
         X, Y = np.meshgrid(x, y)
-        gauss_map[X, Y] = np.exp(- 0.5 * np.sqrt(_A * _B - _C ** 2) *
+        gauss_map[Y, X] = np.exp(- 0.5 * np.sqrt(_A * _B - _C ** 2) *
                                  (_A * ((X - cx) / width) ** 2 + _B * ((Y - cy) / height) ** 2
                                  + 2 * _C * ((X - cx) / width) * ((Y - cy) / height)))
         gauss_map = (gauss_map - np.min(gauss_map)) / (np.max(gauss_map) - np.min(gauss_map))
@@ -173,7 +173,7 @@ class FastmrtPretrainTransform:
         with temp_seed(seed):
             simulated_data = self.simufocus_transform(data["kspace"].shape)
             interface_data = self.transform_interface(simulated_data, image)
-        interface_data.update({
+        interface_data["metainfo"].update({
             "file_name": data["fname"],
             "slice_idx": data["dataslice"],
         })
@@ -186,17 +186,18 @@ class FastmrtPretrainTransform:
         kspace = fft2c_numpy(image * phase_map, fftshift_dim=(-2, -1))
         kspace_ref = fft2c_numpy(image, fftshift_dim=(-2, -1))
         frame_idx = int(np.where(simulated_data["delta_phis"] == max_phase)[0])
+        metainfo = dict(frame_idx=frame_idx, 
+                        coil_idx=0)
         return {
             "kspace": kspace.astype(np.complex64),
             "kspace_ref": kspace_ref.astype(np.complex64),
             "tmap_mask": np.ones(kspace.shape),
-            "frame_idx": frame_idx,
-            "coil_idx": 0,
             "phase_map": phase_map,
+            "metainfo": metainfo,
         }
 
 
-class FastmriProcessingTransform:
+class FastmriPreprocessingTransform:
 
     def __init__(
             self,

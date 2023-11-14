@@ -4,7 +4,7 @@ DATA:
   FORMAT: CF
   DIR:
       - ../Datasets/FastMRT Dataset V5.0/phantom
-  ACCELERATION: 2
+  ACCELERATION: 4
 MODEL:
   IN_CHANNELS: 1              # Fixed Param
   OUT_CHANNELS: 1             # Fixed Param
@@ -12,14 +12,11 @@ MODEL:
   LEVEL_NUM: 4                # Variable Param 08 recommend 4
   DROP_PROB: 0.0              # Variable Param 09 毫无影响
   LEAKYRELU_SLOPE: 0.1        # Variable Param 10 recommend 0.1
-  LAST_LAYER_WITH_ACT: False  # Variable Param 11 几乎无影响
   LR: 5e-4                    # Variable Param 12 recommend 1e-3
-  LR_STEP_SIZE: 40            # Variable Param 13
-  LR_GAMMA: 0.1               # Variable Param 14
-  WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
+  WEIGHT_DECAY: 1e-4          # Variable Param 15 recommend 1e-4
   LOSS_TYPE: l1
 LOG:
-  NAME: exp0607-0|cunet|train-test|phantom|2X  # Baseline
+  NAME: exp0903-5|cunet|train-test|phantom|4X_wd1e-4  # Baseline
 AUGS:
   ENABLED: false
   CA_RATE: 0.3

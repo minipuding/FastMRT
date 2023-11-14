@@ -51,7 +51,10 @@ class FastmrtDataModule(pl.LightningDataModule):
             stage: str = 'train',
             transform: Callable = None,
     ) -> DataLoader[Any]:
-        data_path = [os.path.join(sub_data_path, stage, self._sub_folder(stage)) for sub_data_path in self.root]
+        if self.dataset_type == '2D':
+            data_path = [os.path.join(sub_data_path, stage, self._sub_folder(stage)) for sub_data_path in self.root]
+        else:
+            data_path = os.path.join(self.root[0], stage)
         shuffle = True
 
         # choose transform depend on stage
@@ -71,8 +74,8 @@ class FastmrtDataModule(pl.LightningDataModule):
         if self.dataset_type == '2D':
             dataset = SliceDataset(root=data_path, transform=transform)
         elif self.dataset_type == 'PT':
-            # dataset = pt_SliceDataset(root=data_path, challenge="singlecoil", transform=transform)
-            dataset = pt_ImagenetDataset(root=data_path, transform=transform)
+            dataset = pt_SliceDataset(root=data_path, challenge="singlecoil", transform=transform)
+            # dataset = pt_ImagenetDataset(root=data_path, transform=transform)
         else:
             raise ValueError("``dataset_type`` must be one of ``2D``, ``3D`` and ``T-3D``")
 

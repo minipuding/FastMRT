@@ -24,10 +24,12 @@ from fastmrt.utils.seed import randomness
 from fastmrt.utils.trans import complex_tensor_to_real_tensor as ct2rt
 from fastmrt.utils.trans import complex_np_to_real_np as cn2rn
 from fastmrt.utils.fftc import ifft2c_numpy
+from fastmrt.utils.vis import draw_tmap
 from transforms import CSTransform
 import eval
 import sys
 from tqdm import tqdm
+import json
 
 
 def cs_total_variation(kspace: Tensor, reg_wt: float, num_low_freqs: int, num_iters: int=200):
@@ -115,6 +117,8 @@ def build_args():
                         help="(int optional) the number of low frequencies.")
     parser.add_argument('-rw', '--reg_wt', type=float, default=0.01,
                         help="")
+    parser.add_argument('--save_dir', type=str, default='../logs/CS', 
+                        help='')
 
     # load directory config
     core_args = parser.parse_args()
@@ -169,11 +173,12 @@ if __name__ == "__main__":
         transform=transforms,
     )
 
+    start_time = time.time()
     outputs = run_bart(args, dataset)
+    end_time = time.time()
 
     # calculate image metrics
     img_metrics = eval.calc_image_metrics([cn2rn(sample['pred']) for sample in outputs], [cn2rn(ifft2c_numpy(sample['kspace'])) for sample in outputs])
-    print(img_metrics)
     
     # calculate temperature metrics
     full_tmaps, recon_tmaps, file_names = [], [], []
@@ -181,6 +186,32 @@ if __name__ == "__main__":
         if sample["metainfo"]["frame_idx"] > 0: # we only focus on temperature maps after first frame.
             full_tmaps += [prf_func(ifft2c_numpy(sample["kspace"]),  ifft2c_numpy(sample["kspace_ref"])) * sample["tmap_mask"]]
             recon_tmaps += [prf_func(sample["pred"], sample["pred_ref"]) * sample["tmap_mask"]]
+            file_names += [f"{sample['metainfo']['file_name']}_" \
+                            f"f{sample['metainfo']['frame_idx']:02d}" \
+                            f"s{sample['metainfo']['slice_idx']}" \
+                            f"c{sample['metainfo']['coil_idx']}"]
 
     tmap_metrics = eval.calc_tmap_metrics(full_tmaps, recon_tmaps, args.log_tmap_patch_rate, args.log_tmap_heated_thresh)
-    print(tmap_metrics)
+
+    # combine metrics
+    metrics = {"cost_time": (end_time - start_time) / len(dataset)}
+    for k, v in img_metrics.items():
+        metrics.update({k: float(v.to('cpu'))})
+    for k, v in tmap_metrics.items():
+        metrics.update({k: float(v.to('cpu'))})
+    
+    # save result
+    save_root = os.path.join(args.save_dir, f'{os.path.basename(args.data_dir[0])}_{args.data_acceleration}x')
+    os.makedirs(save_root, exist_ok=True)
+    with open(os.path.join(save_root, 'metrics.json'), 'w') as fp:
+        json.dump(metrics, fp)
+
+    for full_tmap, recon_tmap, file_name in tqdm(zip(full_tmaps, recon_tmaps, file_names)):
+        save_dir = os.path.join(save_root, file_name)
+        os.makedirs(save_dir, exist_ok=True)
+        np.save(os.path.join(save_dir, "full_tmap"), full_tmap)
+        np.save(os.path.join(save_dir, "recon_tmap"), recon_tmap)
+        with draw_tmap(torch.from_numpy(full_tmap)) as plt:
+            plt.savefig(os.path.join(save_dir, "full_tmap.png"))
+        with draw_tmap(torch.from_numpy(recon_tmap)) as plt:
+            plt.savefig(os.path.join(save_dir, "recon_tmap.png"))

@@ -5,15 +5,15 @@ DATA:
       - ../Datasets/FastMRT Dataset V5.0/phantom
   ACCELERATION: 4
 MODEL:
-  BASE_CHANNELS: 32
+  BASE_CHANNELS: 64
   LEVEL_NUM: 4
   DROP_PROB: 0.0
   LEAKYRELU_SLOPE: 0.1
   LR: 5e-4
   WEIGHT_DECAY: 1e-4
-  LOSS_TYPE: decoupled
+  LOSS_TYPE: l1
 LOG:
-  NAME: exp0626-1|runet|train-test|phantom|4X|dl_alpha=0.8  # Baseline
+  NAME: exp0903-3|runet|train-test|phantom|4X_bc64  # Baseline
 AUGS:
   ENABLED: false
   CA_RATE: 0.3
