@@ -16,6 +16,7 @@ from fastmrt.utils.metrics import FastmrtMetrics
 from fastmrt.utils.normalize import denormalize
 from fastmrt.utils.trans import real_tensor_to_complex_tensor as rt2ct
 from fastmrt.utils.trans import complex_tensor_to_real_tensor as ct2rt
+from fastmrt.utils.trans import real_tensor_to_complex_np as rt2cn
 from fastmrt.utils.vis import draw_tmap, draw_bland_altman_fig, draw_linear_regression_fig
 from fastmrt.data.prf import PrfFunc
 import torch
@@ -143,7 +144,7 @@ class BaseModule(pl.LightningModule):
         image_metrics = self._calc_image_metrics(outputs)
 
         # calculate temperature maps metrics
-        full_tmaps, recon_tmaps, file_names = [], [], []
+        full_tmaps, recon_tmaps, labels, recon_outputs, file_names = [], [], [], [], []
         for log in outputs:
             for sample_idx in range(log["input"].shape[0]):
                 if log["frame_idx"][sample_idx] > 0: # we only focus on temperature maps after first frame.
@@ -151,7 +152,8 @@ class BaseModule(pl.LightningModule):
                                                     rt2ct(log["label_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
                     recon_tmaps += [self.tmap_prf_func(rt2ct(log["output"][sample_idx]),
                                                     rt2ct(log["output_ref"][sample_idx])) * log["tmap_mask"][sample_idx]]
-                    
+                    labels += [rt2cn(log["label"][sample_idx])]
+                    recon_outputs += [rt2cn(log["output"][sample_idx])]
                     file_names += [f"{log['file_name'][sample_idx]}_" \
                                   f"f{log['frame_idx'][sample_idx]:02d}" \
                                   f"s{log['slice_idx'][sample_idx]}" \
@@ -183,11 +185,13 @@ class BaseModule(pl.LightningModule):
         # save medias
         save_root = os.path.join(self.logger.save_dir, self.logger.name, self.logger.experiment.id, "medias")
         os.makedirs(save_root, exist_ok=True)
-        for full_tmap, recon_tmap, file_name in zip(full_tmaps, recon_tmaps, file_names):
+        for full_tmap, recon_tmap, label, output, file_name in zip(full_tmaps, recon_tmaps, labels, recon_outputs, file_names):
             save_dir = os.path.join(save_root, file_name)
             os.makedirs(save_dir, exist_ok=True)
             np.save(os.path.join(save_dir, "full_tmap"), full_tmap.cpu().numpy())
             np.save(os.path.join(save_dir, "recon_tmap"), recon_tmap.cpu().numpy())
+            np.save(os.path.join(save_dir, "label"), label)
+            np.save(os.path.join(save_dir, "output"), output)
             with draw_tmap(full_tmap) as plt:
                 plt.savefig(os.path.join(save_dir, "full_tmap.png"))
             with draw_tmap(recon_tmap) as plt:

@@ -208,5 +208,5 @@ class FastmrtDataTransform2D:
         return [torch.from_numpy(data)  if data is not None else None for data in datas]
 
     def _generate_seed(self):
-        return np.random.randint(2 ** 32 - 1)
+        return np.random.randint(2 ** 31 - 1)
 

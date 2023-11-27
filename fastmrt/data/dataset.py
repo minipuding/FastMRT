@@ -16,6 +16,8 @@ from typing import (
 from pathlib import Path
 import os
 import h5py
+import platform
+import re
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -33,6 +35,7 @@ class Dataset(torch.utils.data.Dataset):
             root: Paths to the datasets.
         """
         self.data = []
+        self.sys = platform.system()
 
         # load 5-D complex64 .h5 dataset
         # [frames, slice, coils, height, width]
@@ -54,7 +57,11 @@ class Dataset(torch.utils.data.Dataset):
             kspace = hf["kspace"][()].transpose()
             tmap_masks = hf["tmap_masks"][()].transpose() \
                 if hf["tmap_masks"][()].shape is not None else None
-        log_file_name = '_'.join(file_name.split("/")[-4:])
+
+        if self.sys == "Windows":
+            log_file_name = '_'.join(re.split(r"\\|/", file_name)[-4:])
+        elif self.sys == "Linux":
+            log_file_name = '_'.join(file_name.split("/")[-4:])
         return header, kspace, tmap_masks, log_file_name
 
 class SliceDataset(Dataset):
