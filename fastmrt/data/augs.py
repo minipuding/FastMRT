@@ -112,6 +112,7 @@ class ComplexAugs:
                     phs_mask = np.concatenate((phs, tmap_mask[np.newaxis, :]), axis=0).transpose([1, 2, 0])
                     phs_mask = self.apply_augs(phs_mask).transpose([-1, 0, 1])
                     phs = rn2cn(phs_mask[:2])
+                    phs /= np.abs(phs) # re-regular
                     tmap_mask = phs_mask[-1]
                 sample = amp * phs
             else:

@@ -6,3 +6,4 @@ logs/*
 /fastmrt.egg-info/
 last_config.yaml
 vis.ipynb
+/tmaps

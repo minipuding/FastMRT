@@ -1,0 +1,34 @@
+!inherit
+_BASE_: !include _base_.yaml
+DATA:
+  DIR:
+      - ../pt_Datasets
+  TYPE: PT
+  ACCELERATION: 4
+  WORKERS: 0
+MODEL:
+  BASE_CHANNELS: 128           # Variable Param 07 recommend 32
+  CH_MULT: 
+    - 1
+    - 2
+    - 2
+    - 2
+  ATTN: 
+    - 3
+  NUM_RES_BLOCKS: 2
+  DROP_PROB: 0.1              # Variable Param 09
+  LR: 2e-4                    # Variable Param 12 recommend 1e-3
+  WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
+  LOSS_TYPE: l1
+  MAX_EPOCHS: 20
+LOG:
+  NAME: exp1210-1|pretrain_fastmri|train|4X  # Baseline
+  IMAGES_FREQ: 10
+AUGS:
+  ENABLED: false
+  CA_RATE: 0.3
+KD:
+  ENABLED: false
+  TEA_DIR: /home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/RESUNET/1kcimc67/checkpoints/epoch=199-step=160400.ckpt
+TEST:
+  CKPT_DIR: /home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/RESUNET/1dbrzi40/checkpoints/epoch=199-step=160400.ckpt

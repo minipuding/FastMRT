@@ -2,8 +2,8 @@
 _BASE_: !include _base_.yaml
 DATA:
   DIR:
-      - ../Datasets/FastMRT Dataset V5.0/exvivo
-  ACCELERATION: 2
+      - ../Datasets/FastMRT Dataset V5.0/invivo
+  ACCELERATION: 4
 MODEL:
   BASE_CHANNELS: 32           # Variable Param 07 recommend 32
   CH_MULT: 
@@ -14,17 +14,17 @@ MODEL:
   ATTN: 
     - 3
   NUM_RES_BLOCKS: 2
-  DROP_PROB: 0.1              # Variable Param 09 毫无影响
+  DROP_PROB: 0.1              # Variable Param 09
   LR: 5e-4                    # Variable Param 12 recommend 1e-3
   WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
   LOSS_TYPE: decoupled
 LOG:
-  NAME: exp0831-0|resunet+mim-kd-da|train-test|phantom|4X_wo-pretrain  # Baseline
+  NAME: exp1127-1|resunet+mim|train-test|invivo|4X  # Baseline
 AUGS:
   ENABLED: true
   CA_RATE: 0.3
 KD:
-  ENABLED: true
+  ENABLED: false
   TEA_DIR: /home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/RESUNET/1kcimc67/checkpoints/epoch=199-step=160400.ckpt
 TEST:
-  CKPT_DIR: /home/sxu/SJTU/FastMRT/fastMRT/FastMRT/logs/RESUNET/1dbrzi40/checkpoints/epoch=199-step=160400.ckpt
+  CKPT_DIR: D:\SXu\SJTU\FastMRT\fastMRT\FastMRT\logs\RESUNET\20wlhiix\checkpoints\epoch=199-step=141400.ckpt

@@ -161,7 +161,7 @@ class FastmrtRunner:
             val_transform=self.val_transform,
             test_transform=self.test_transform,
             batch_size=self.args.data_batch_size,
-            dataset_type='2D',
+            dataset_type=self.args.data_type,
             workers=args.data_workers,
         )
 

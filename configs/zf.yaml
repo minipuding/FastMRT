@@ -2,7 +2,7 @@
 _BASE_: !include _base_.yaml
 DATA:
   DIR:
-    - ../Datasets/FastMRT Dataset V5.0/phantom
+    - ../Datasets/FastMRT Dataset V5.0/invivo
   ACCELERATION: 4
 LOG:
-  NAME: exp0724-0|zf|test|phantom|4X  # zero filled
+  NAME: exp1127-3|zf|test|invivo|4X  # zero filled

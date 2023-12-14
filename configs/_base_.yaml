@@ -1,6 +1,7 @@
 DATA:
   DIR:
     - ../Datasets/FastMRT Dataset V5.0/phantom
+  TYPE: 2D
   FORMAT: RF
   BATCH_SIZE: 8
   SAMPLING_MODE: EQUISPACED
