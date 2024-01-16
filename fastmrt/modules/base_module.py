@@ -416,6 +416,10 @@ class FastmrtModule(BaseModule):
         
         if loss_type == 'l1':
             self.loss_fn = self._l1_loss
+        elif loss_type == 'l2':
+            self.loss_fn = self._l2_loss
+        elif loss_type == 'cos':
+            self.loss_fn = self._cosine_loss
         elif loss_type == 'decoupled':
             self.loss_fn = self._decoupled_loss
         else:
@@ -488,6 +492,12 @@ class FastmrtModule(BaseModule):
     def _l1_loss(self, output, label):
 
         return F.l1_loss(output, label)
+    
+    def _l2_loss(self, output, label):
+        return F.mse_loss(output, label)
+    
+    def _cosine_loss(self, output, label):
+        return torch.abs(torch.sum(output * label, dim=1) * rt2ct(label) - rt2ct(label)).mean()
 
     def _decoupled_loss(self, output, label):
 

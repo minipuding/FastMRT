@@ -2,7 +2,7 @@
 _BASE_: !include _base_.yaml
 DATA:
   DIR:
-      - ../Datasets/FastMRT Dataset V5.0/phantom
+      - ../Datasets/FastMRT Dataset V5.0/exvivo
   ACCELERATION: 4
 MODEL:
   BASE_CHANNELS: 32
@@ -11,9 +11,9 @@ MODEL:
   LEAKYRELU_SLOPE: 0.1
   LR: 5e-4
   WEIGHT_DECAY: 1e-4
-  LOSS_TYPE: decoupled
+  LOSS_TYPE: cos
 LOG:
-  NAME: exp0903-3|runet|train-test|phantom|4X_bc64  # Baseline
+  NAME: exp0102-3|runet|train-test|exvivo|4X_cos  # Baseline
 AUGS:
   ENABLED: false
   CA_RATE: 0.3

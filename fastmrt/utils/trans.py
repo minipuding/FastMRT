@@ -94,7 +94,7 @@ def real_tensor_to_complex_np(data: torch.Tensor) -> np.ndarray:
     Returns:
         Complex numpy version of data.
     """
-    return real_tensor_to_complex_tensor(data.cpu()).numpy()
+    return real_tensor_to_complex_tensor(data.cpu()).detach().numpy()
 
 
 def complex_tensor_to_amp_phase_tensor(data: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:

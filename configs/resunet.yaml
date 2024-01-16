@@ -2,7 +2,7 @@
 _BASE_: !include _base_.yaml
 DATA:
   DIR:
-      - ../Datasets/FastMRT Dataset V5.0/invivo
+      - ../Datasets/FastMRT Dataset V5.0/exvivo
   ACCELERATION: 4
 MODEL:
   BASE_CHANNELS: 32           # Variable Param 07 recommend 32
@@ -17,11 +17,11 @@ MODEL:
   DROP_PROB: 0.1              # Variable Param 09
   LR: 5e-4                    # Variable Param 12 recommend 1e-3
   WEIGHT_DECAY: 0          # Variable Param 15 recommend 1e-4
-  LOSS_TYPE: decoupled
+  LOSS_TYPE: cos
 LOG:
-  NAME: exp1127-1|resunet+mim|train-test|invivo|4X  # Baseline
+  NAME: exp0103-3|resunet|train-test|exvivo|4X_cos  # Baseline
 AUGS:
-  ENABLED: true
+  ENABLED: false
   CA_RATE: 0.3
 KD:
   ENABLED: false
